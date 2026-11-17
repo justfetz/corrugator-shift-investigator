@@ -3590,7 +3590,48 @@
    "mode": "offline",
    "period": "week",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Review of #111: 'yesterday' moves the Period control to Day, so the owner's default (all shifts) applies to it as under Day; it read the controls' Week and answered shift 2 alone.",
+   "note": "Review of #111: 'yesterday' moves the Period control to Day, so the owner's default (all shifts) applies to it as under Day; it read the controls' Week and answered shift 2 alone. Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 7: 'top downtime reasons' is the semantic ranking now, read as 'worst' and 'biggest' are, so this case's expectations moved to the ranking (for the owner to confirm: it retires #185's carve-out of #101's review). The review's own expectations moved, unchanged, to yesterday-under-week-downtime-reasons-review, which asks 'What were the downtime reasons yesterday?' (no ranking word).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5,
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime( yesterday)?(, leaving out [^:]+)?: \\*\\*[0-9.]+ min\\*\\*",
+     "^Read as: downtime in min by stop reason, 2026-09-11 \\([A-Z][a-z]{2}\\), all shifts, largest first, top 5\\.$"
+    ],
+    "asked_sections_match": [
+     "^Missed splice had the most downtime yesterday"
+    ]
+   },
+   "reviewed_by": "owner-pending"
+  },
+  {
+   "id": "yesterday-under-week-downtime-reasons-review",
+   "type": "routing",
+   "mode": "offline",
+   "period": "week",
+   "question": "What were the downtime reasons yesterday?",
+   "note": "Issue #185, the coordinator's review of PR #186 (round 1), item 7: yesterday-under-week-is-all-shifts's expectations of the owner's review, kept on the question without a ranking word, which the review still answers. Review of #111: 'yesterday' moves the Period control to Day, so the owner's default (all shifts) applies to it as under Day; it read the controls' Week and answered shift 2 alone.",
    "expect": {
     "url": "/corr/1/day/2026-09-11?measure=review",
     "status": "complete"
@@ -6995,10 +7036,51 @@
    "id": "owner-top-downtime-reasons-yesterday",
    "type": "routing",
    "mode": "offline",
-   "reviewed_by": "owner",
+   "reviewed_by": "owner-pending",
    "day": "2026-09-09",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101, the owner's downtime rules (2026-11-10): a downtime question with no scope answers the previous production day, all shifts, whatever the shift control says; shift detail only when a shift is named or a flag pulls one in. Asked with the default controls (Monday 2026-09-14, shift 2), yesterday is Friday 2026-09-11, all shifts. Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 3's operator downtime is over its band, led by missed splices, which were over the band on their own once more in the trailing year. Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Wednesday 2026-09-09 (shift 2), yesterday is Tuesday 2026-09-08, all shifts, the day whose leading flag is shift 3's operator downtime led by missed splices that were over the band on their own once more in the trailing year (on the new records that pattern sits in the week of 7 September, the knife-jam story's week). Changed from the owner's expectations: the dates and their weekdays (Friday / Thursday to Tuesday / Monday); for the owner to confirm.",
+   "note": "Issue #101, the owner's downtime rules (2026-11-10): a downtime question with no scope answers the previous production day, all shifts, whatever the shift control says; shift detail only when a shift is named or a flag pulls one in. Asked with the default controls (Monday 2026-09-14, shift 2), yesterday is Friday 2026-09-11, all shifts. Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 3's operator downtime is over its band, led by missed splices, which were over the band on their own once more in the trailing year. Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Wednesday 2026-09-09 (shift 2), yesterday is Tuesday 2026-09-08, all shifts, the day whose leading flag is shift 3's operator downtime led by missed splices that were over the band on their own once more in the trailing year (on the new records that pattern sits in the week of 7 September, the knife-jam story's week). Changed from the owner's expectations: the dates and their weekdays (Friday / Thursday to Tuesday / Monday); for the owner to confirm. Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 7: 'top downtime reasons' is the semantic ranking now, read as 'worst' and 'biggest' are, so this case's expectations moved to the ranking (for the owner to confirm: it retires #185's carve-out of #101's review). The review's own expectations moved, unchanged, to owner-downtime-reasons-yesterday-review, which asks 'What were the downtime reasons yesterday?' (no ranking word).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-08?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5,
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-08"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime( yesterday)?(, leaving out [^:]+)?: \\*\\*[0-9.]+ min\\*\\*",
+     "^Read as: downtime in min by stop reason, 2026-09-08 \\([A-Z][a-z]{2}\\), all shifts, largest first, top 5\\.$"
+    ],
+    "asked_sections_match": [
+     "^Missed splice had the most downtime yesterday"
+    ]
+   }
+  },
+  {
+   "id": "owner-downtime-reasons-yesterday-review",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-09",
+   "question": "What were the downtime reasons yesterday?",
+   "note": "Issue #185, the coordinator's review of PR #186 (round 1), item 7: owner-top-downtime-reasons-yesterday's expectations of the owner's review, kept on the question without a ranking word, which the review still answers. Issue #101, the owner's downtime rules (2026-11-10): a downtime question with no scope answers the previous production day, all shifts, whatever the shift control says; shift detail only when a shift is named or a flag pulls one in. Asked with the default controls (Monday 2026-09-14, shift 2), yesterday is Friday 2026-09-11, all shifts. Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 3's operator downtime is over its band, led by missed splices, which were over the band on their own once more in the trailing year. Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Wednesday 2026-09-09 (shift 2), yesterday is Tuesday 2026-09-08, all shifts, the day whose leading flag is shift 3's operator downtime led by missed splices that were over the band on their own once more in the trailing year (on the new records that pattern sits in the week of 7 September, the knife-jam story's week). Changed from the owner's expectations: the dates and their weekdays (Friday / Thursday to Tuesday / Monday); for the owner to confirm.",
    "expect": {
     "url": "/corr/1/day/2026-09-08?measure=review",
     "status": "complete",
@@ -7048,7 +7130,49 @@
    "day": "2026-09-08",
    "scope": "day",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101: asked on Tuesday 2026-09-29 with the production-day scope, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). That day two shifts are flagged for operator downtime, shift 2 the larger; missed splices led it and were over the band on their own once more in the trailing year (value-review-day-0928 computes it a second way). Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Tuesday 2026-09-08, yesterday is Monday 2026-09-07; that day shifts 1 and 3 are flagged for operator downtime, shift 1 the larger, led by missed splices that were over the band on their own once more in the trailing year (value-review-day-0907 computes the day a second way).",
+   "note": "Issue #101: asked on Tuesday 2026-09-29 with the production-day scope, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). That day two shifts are flagged for operator downtime, shift 2 the larger; missed splices led it and were over the band on their own once more in the trailing year (value-review-day-0928 computes it a second way). Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Tuesday 2026-09-08, yesterday is Monday 2026-09-07; that day shifts 1 and 3 are flagged for operator downtime, shift 1 the larger, led by missed splices that were over the band on their own once more in the trailing year (value-review-day-0907 computes the day a second way). Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 7: 'top downtime reasons' is the semantic ranking now, read as 'worst' and 'biggest' are, so this case's expectations moved to the ranking (for the owner to confirm: it retires #185's carve-out of #101's review). The review's own expectations moved, unchanged, to yesterday-downtime-reasons-review-from-tuesday, which asks 'What were the downtime reasons yesterday?' (no ranking word).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-07?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5,
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-07"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime( yesterday)?(, leaving out [^:]+)?: \\*\\*[0-9.]+ min\\*\\*",
+     "^Read as: downtime in min by stop reason, 2026-09-07 \\([A-Z][a-z]{2}\\), all shifts, largest first, top 5\\.$"
+    ],
+    "asked_sections_match": [
+     "^Missed splice had the most downtime yesterday"
+    ]
+   },
+   "reviewed_by": "owner-pending"
+  },
+  {
+   "id": "yesterday-downtime-reasons-review-from-tuesday",
+   "type": "routing",
+   "mode": "offline",
+   "day": "2026-09-08",
+   "scope": "day",
+   "question": "What were the downtime reasons yesterday?",
+   "note": "Issue #185, the coordinator's review of PR #186 (round 1), item 7: yesterday-review-from-tuesday's expectations of the owner's review, kept on the question without a ranking word, which the review still answers. Issue #101: asked on Tuesday 2026-09-29 with the production-day scope, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). That day two shifts are flagged for operator downtime, shift 2 the larger; missed splices led it and were over the band on their own once more in the trailing year (value-review-day-0928 computes it a second way). Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Tuesday 2026-09-08, yesterday is Monday 2026-09-07; that day shifts 1 and 3 are flagged for operator downtime, shift 1 the larger, led by missed splices that were over the band on their own once more in the trailing year (value-review-day-0907 computes the day a second way).",
    "expect": {
     "url": "/corr/1/day/2026-09-07?measure=review",
     "status": "complete",
@@ -15962,13 +16086,13 @@
    "mode": "offline",
    "question": "Top stop reason this week",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=reason&rank=most",
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=week&by=reason&rank=most",
     "status": "complete",
     "tools": [
      {
       "tool": "semantic_query",
       "arguments": {
-       "measure": "stops",
+       "measure": "downtime_minutes",
        "group_by": [
         "reason"
        ],
@@ -15981,11 +16105,12 @@
      "render_chart"
     ],
     "sections_match": [
-     "^Stacker had the most stops this week, leaving out Planned maintenance and Power outage: \\*\\*[0-9][0-9,.]* stops\\*\\*",
-     "^Read as: stops by stop reason, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts, largest first\\."
+     "^Stacker had the most downtime this week, leaving out Planned maintenance and Power outage: \\*\\*[0-9][0-9,.]* min\\*\\*",
+     "^Read as: downtime in min by stop reason, ranked by downtime minutes \\(the plant's default\\), Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts, largest first\\."
     ]
    },
-   "note": "Coordinator on #144 (round 5): answered the review. Reasons ranked on stops. Reviewer of PR #155 (head f056659), item 1: \"of the unplanned stop reasons\" called the power outage planned. The rows set apart are named: the claim holds over every other row."
+   "note": "Coordinator on #144 (round 5): answered the review. Reasons ranked on stops. Reviewer of PR #155 (head f056659), item 1: \"of the unplanned stop reasons\" called the power outage planned. The rows set apart are named: the claim holds over every other row. Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 6 (the coordinator's default from the owner's 15 Nov calls, the owner can overrule at merge): 'stop reason' ranks by downtime minutes like any other reasons; only 'by stops' or 'most stops' counts them. Re-pointed from the stops (Stacker, 32 stops) to the minutes (Stacker, 42.93 min).",
+   "reviewed_by": "owner-pending"
   },
   {
    "id": "semantic-highest-downtime-day",
@@ -24583,6 +24708,916 @@
     "raises": "^'quarter' is not a window the semantic model reads"
    },
    "note": "Issue #185, the reviewer subagent's check of 5a93655: 'per year' is a rate, but 'this quarter' beside it is still a window the model does not read; 5a93655 let the selected day's levers answer."
+  },
+  {
+   "id": "top-n-a-quarter-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons Q3",
+   "expect": {
+    "raises": "^'q3' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\. Did you mean 'top operator reasons year to date' or 'top operator reasons this month'\\?$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: c7b61dd (and main) answered shift 2's operator downtime on the selected day, 2.15%. A quarter is no window the model reads."
+  },
+  {
+   "id": "top-n-a-quarter-refused-all",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "top operator reasons Q3",
+   "expect": {
+    "raises": "^'q3' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: the page on All: c7b61dd (and main) answered the selected day's shift breakdown, 3.29% on shift 1."
+  },
+  {
+   "id": "top-n-another-quarter-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons Q2",
+   "expect": {
+    "raises": "^'q2' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-in-a-quarter-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons in Q3",
+   "expect": {
+    "raises": "^'q3' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: 'in Q3': c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-quarter-to-date-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons QTD",
+   "expect": {
+    "raises": "^'qtd' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: the quarter to date: c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-fiscal-year-to-date-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons FYTD",
+   "expect": {
+    "raises": "^'fytd' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: the fiscal year to date is not the calendar year to date the model reads: c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-a-half-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons H1",
+   "expect": {
+    "raises": "^'h1' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a half: c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-the-first-half-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons first half",
+   "expect": {
+    "raises": "^'first half' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a half said in words: c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-since-a-weekday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons since Monday",
+   "expect": {
+    "raises": "^'since monday' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\. Did you mean 'top operator reasons this week'\\?$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span from a weekday to now: c7b61dd answered the selected day, 2.15%. This week is offered, and answers."
+  },
+  {
+   "id": "top-n-since-a-date-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons since 1 Jan",
+   "expect": {
+    "raises": "^'since 1 jan' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span from a date: c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-since-a-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime since June",
+   "expect": {
+    "raises": "^'since june' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span from a month: c7b61dd (and main) answered June's downtime review, 2.56%."
+  },
+  {
+   "id": "top-n-lately-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons lately",
+   "expect": {
+    "raises": "^'lately' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: no span at all: c7b61dd answered the selected day, 2.15%."
+  },
+  {
+   "id": "top-n-recently-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime recently",
+   "expect": {
+    "raises": "^'recently' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: no span at all: c7b61dd answered the selected day's review, 2.88%."
+  },
+  {
+   "id": "top-n-annually-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons annually",
+   "expect": {
+    "raises": "^'annually' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a year said as a rate of no money is a window the model does not read: c7b61dd answered the selected day, 2.15%. Said of money it stays the levers' yearly rate (top-n-a-year-is-a-rate-not-a-window)."
+  },
+  {
+   "id": "top-n-month-to-date-with-hyphens-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime month-to-date",
+   "expect": {
+    "raises": "^'month-to-date' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: the hyphens got past '\\bto\\s+date': c7b61dd (and main) answered all of September's review, 3.24%."
+  },
+  {
+   "id": "top-n-rolling-weeks-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime rolling 4 weeks",
+   "expect": {
+    "raises": "^'rolling 4 weeks' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a rolling span: c7b61dd (and main) answered this week's review, 2.90%."
+  },
+  {
+   "id": "top-n-rolling-days-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime rolling 30 days",
+   "expect": {
+    "raises": "^'rolling 30 days' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a rolling span of days: c7b61dd (and main) answered the selected day's review, 2.88%."
+  },
+  {
+   "id": "top-n-last-n-days-in-words-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime last fifteen days",
+   "expect": {
+    "raises": "^'last fifteen days' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: the last N days said in a number word the rolling-window pattern did not list: c7b61dd answered the selected day's review, 2.88%."
+  },
+  {
+   "id": "top-n-a-span-of-months-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "January through September",
+   "expect": {
+    "raises": "^'january through september' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span of months: c7b61dd (and main) answered an MSF period compare, 59,328.1 MSF."
+  },
+  {
+   "id": "top-n-between-two-months-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "between June and August",
+   "expect": {
+    "raises": "^'between june and august' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span of months: c7b61dd (and main) answered an MSF/day period compare, 2,582.1 MSF/day."
+  },
+  {
+   "id": "top-n-downtime-over-a-span-of-months-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime January through September",
+   "expect": {
+    "raises": "^'january through september' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\. Did you mean 'downtime year to date'\\?$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span of months beside a measure: c7b61dd (and main) answered an MSF period compare, never the downtime."
+  },
+  {
+   "id": "top-n-downtime-versus-previous-names-previous",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Downtime last week vs previous",
+   "expect": {
+    "raises": "^(?!.*'last (week|month)' is not a window)'previous' names no window: the semantic model compares a window with the one just before it, asked as 'this week compared with the week before'\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last week' is not a window the semantic model reads\", which is false; main answered this week's review."
+  },
+  {
+   "id": "top-n-trim-versus-previous-names-previous",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim last week vs previous",
+   "expect": {
+    "raises": "^(?!.*'last (week|month)' is not a window)'previous' names no window: the semantic model compares a window with the one just before it, asked as 'this week compared with the week before'\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last week' is not a window\"; main answered last week's side trim against the week before as 3.45%."
+  },
+  {
+   "id": "top-n-speed-versus-previous-names-previous",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed last month vs previous",
+   "expect": {
+    "raises": "^(?!.*'last (week|month)' is not a window)'previous' names no window: the semantic model compares a window with the one just before it, asked as 'this month compared with the month before'\\. Did you mean 'speed last month'\\?$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last month' is not a window\". Last month against the month before is two windows before the selected one, so the window asked is offered alone."
+  },
+  {
+   "id": "top-n-msf-versus-previous-names-previous",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf last month vs previous",
+   "expect": {
+    "raises": "^(?!.*'last (week|month)' is not a window)'previous' names no window: the semantic model compares a window with the one just before it, asked as 'this month compared with the month before'"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last month' is not a window\"."
+  },
+  {
+   "id": "top-n-waste-versus-previous-names-previous",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "waste last month vs previous",
+   "expect": {
+    "raises": "^(?!.*'last (week|month)' is not a window)'previous' names no window: the semantic model compares a window with the one just before it, asked as 'this month compared with the month before'"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last month' is not a window\"."
+  },
+  {
+   "id": "top-n-how-did-last-week-compare-to-previous",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how did last week compare to previous",
+   "expect": {
+    "raises": "^(?!.*'last (week|month)' is not a window)'previous' names no window: the semantic model compares a window with the one just before it, asked as 'this week compared with the week before'"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last week' is not a window\"; main answered this week's MSF against last week's."
+  },
+  {
+   "id": "top-n-compared-to-prior-names-prior",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime last week compared to prior",
+   "expect": {
+    "raises": "^(?!.*'last (week|month)' is not a window)'prior' names no window: the semantic model compares a window with the one just before it, asked as 'this week compared with the week before'"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last week' is not a window\"; main answered this week's review."
+  },
+  {
+   "id": "top-n-last-week-and-this-week-are-two-windows",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top maintenance reasons last week and this week",
+   "expect": {
+    "raises": "^'last week' and 'this week' are two windows: ask one window at a time, or one window against the one just before it, asked as 'this week compared with the week before'\\. Did you mean 'top maintenance reasons this week compared with the week before'\\?$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 2: c7b61dd said \"'last week' is not a window the semantic model reads\"; main answered this week's MSF against last week's. The two windows are this week and the one before it, which the question offered answers."
+  },
+  {
+   "id": "top-n-top-25-orders-says-top-25",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Top 25 orders by rejects this year",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=ytd&by=order&rank=most&top=25",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "order"
+       ],
+       "limit": 25
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Read as: dry-end rejects in sq ft by order, Year to date, 1 Jan–14 Sep 2026 \\(2026-01-01 to 2026-09-14\\), all shifts, largest first, top 25\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 3: N = 25 is the default limit, and c7b61dd read it as 'the first 25'. That N was said rides on the lead, and the address keeps top=25."
+  },
+  {
+   "id": "top-n-top-25-reasons-says-top-25",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 25 reasons this year",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=ytd&by=reason&rank=most&top=25",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 25
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Order change had the most downtime year to date, leaving out Planned maintenance and Power outage: \\*\\*1,326\\.68 min\\*\\*",
+     "^Read as: downtime in min by stop reason, ranked by downtime minutes \\(the plant's default\\), Year to date, 1 Jan–14 Sep 2026 \\(2026-01-01 to 2026-09-14\\), all shifts, largest first, top 25 \\(the window holds 8 that rank\\)\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 3: c7b61dd said no N at all for top 25. The window holds 10 reasons, 8 of which rank: planned maintenance and the power outage are listed apart (the reviewer's check of this round)."
+  },
+  {
+   "id": "top-n-top-100-in-words",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 100 reasons this year",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=ytd&by=reason&rank=most&top=100",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 100
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Order change had the most downtime year to date, leaving out Planned maintenance and Power outage: \\*\\*1,326\\.68 min\\*\\*",
+     "largest first, top 100 \\(the window holds 8 that rank\\)\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 4: c7b61dd read N as one or two digits, so '100' was refused as a word the model does not read, though the address top=100 answered. The window holds 10 reasons, 8 of which rank: planned maintenance and the power outage are listed apart (the reviewer's check of this round)."
+  },
+  {
+   "id": "top-n-top-200-in-words",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 200 reasons this year",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=ytd&by=reason&rank=most&top=200",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 200
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Order change had the most downtime year to date, leaving out Planned maintenance and Power outage: \\*\\*1,326\\.68 min\\*\\*",
+     "largest first, top 200 \\(the window holds 8 that rank\\)\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 4: c7b61dd read N as one or two digits, so '200' was refused as a word the model does not read, though the address top=200 answered. The window holds 10 reasons, 8 of which rank: planned maintenance and the power outage are listed apart (the reviewer's check of this round)."
+  },
+  {
+   "id": "top-n-more-than-the-model-lists-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 201 reasons this year",
+   "expect": {
+    "raises": "^'top 201' asks for more rows than a ranking lists: a ranking lists from 1 to 200 rows\\. Did you mean 'top 200 reasons this year'\\?$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 4: more than MAX_LIMIT is refused naming N, never clamped; c7b61dd refused '201' as a word."
+  },
+  {
+   "id": "top-n-top-0-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 0 reasons last week",
+   "expect": {
+    "raises": "^'top 0' asks for no rows: a ranking lists from 1 to 200 rows\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 5: c7b61dd clamped 0 to 1, and with planned maintenance the one row its headline named no reason ('Downtime last week: **421.10 min**')."
+  },
+  {
+   "id": "top-n-top-1-reason-is-the-largest-unplanned",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 1 reason last week",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&by=reason&rank=most&top=1",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 1
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime (last|this) week, leaving out Planned maintenance: \\*\\*103\\.43 min\\*\\*",
+     "^- Missed splice: \\*\\*103\\.43 min\\*\\*",
+     "^Left out of the ranking",
+     "^- Planned maintenance: \\*\\*123\\.00 min\\*\\*",
+     "largest first, top 1\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 5: N counts the reasons that rank, with planned maintenance shown apart, so the top 1 is the largest unplanned reason (Missed splice, 103.43 min; planned maintenance 123.00 min beside it). c7b61dd refused 'top 1 reason' as naming no measure, and its top N counted planned maintenance among the N."
+  },
+  {
+   "id": "top-n-top-1-reason-is-the-largest-unplanned-all",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "top 1 reason last week",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&by=reason&rank=most&top=1",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 1
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime (last|this) week, leaving out Planned maintenance: \\*\\*103\\.43 min\\*\\*",
+     "^- Missed splice: \\*\\*103\\.43 min\\*\\*",
+     "^Left out of the ranking",
+     "^- Planned maintenance: \\*\\*123\\.00 min\\*\\*",
+     "largest first, top 1\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 5: N counts the reasons that rank, with planned maintenance shown apart, so the top 1 is the largest unplanned reason (Missed splice, 103.43 min; planned maintenance 123.00 min beside it). c7b61dd refused 'top 1 reason' as naming no measure, and its top N counted planned maintenance among the N."
+  },
+  {
+   "id": "top-n-top-stop-reasons-rank-by-minutes",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top stop reasons YTD",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=ytd&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Order change had the most downtime year to date, leaving out Planned maintenance: \\*\\*1,326\\.68 min\\*\\*",
+     "ranked by downtime minutes \\(the plant's default\\)"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 6: 'stop reason(s)' rank by downtime minutes like any other reasons; c7b61dd ranked them by count (1,073 stops), because the split's own word 'stop' set the measure before the reasons' default ranking."
+  },
+  {
+   "id": "top-n-top-stop-reasons-by-stops-still-count",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top stop reasons by stops YTD",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=ytd&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Order change had the most stops year to date: \\*\\*1,073 stops\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 6: only 'by stops' or 'most stops' ranks the reasons by count."
+  },
+  {
+   "id": "top-n-which-reason-cost-us-the-most-leads-with-dollars",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Which reason cost us the most this month",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_usd&window=month&by=reason&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_usd",
+       "group_by": [
+        "reason"
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Knife / slitter jam had the most downtime, priced this month, leaving out Planned maintenance and Power outage: \\*\\*\\$4,142\\*\\*"
+    ],
+    "sections_not_match": "plant's default"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 6: 'cost us the most' asks the money: priced downtime (minutes x the machine rate), led by dollars. c7b61dd ranked minutes '(the plant's default)', reading 'cost' as the verb of the minutes."
+  },
+  {
+   "id": "top-n-worst-downtime-reasons-are-the-ranking",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Worst downtime reasons last week",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime (last|this) week, leaving out Planned maintenance: \\*\\*103\\.43 min\\*\\*",
+     "largest first, top 5\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 7: one of #185's own examples. c7b61dd kept the owner's review, 4.14% of scheduled minutes; 'worst', 'biggest' and 'top' reasons are now the one ranking."
+  },
+  {
+   "id": "top-n-worst-downtime-reasons-are-the-ranking-all",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Worst downtime reasons last week",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime (last|this) week, leaving out Planned maintenance: \\*\\*103\\.43 min\\*\\*",
+     "largest first, top 5\\.$"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 7: one of #185's own examples. c7b61dd kept the owner's review, 4.14% of scheduled minutes; 'worst', 'biggest' and 'top' reasons are now the one ranking."
+  },
+  {
+   "id": "top-n-since-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime since yesterday",
+   "expect": {
+    "raises": "^'since yesterday' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), found by this round's probe: 'yesterday' moved the scope and left 'since' behind, so c7b61dd (and main) answered yesterday's review alone, 2.62%, never the span to now."
+  },
+  {
+   "id": "top-n-since-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed since last week",
+   "expect": {
+    "raises": "^'since last week' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), found by this round's probe: c7b61dd said \"'last week' is not a window the semantic model reads\" (item 2's false reason). A why-question's 'since last week' stays the speed variance's base (WHY_ASK)."
+  },
+  {
+   "id": "top-n-versus-previous-over-a-hand-route",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime vs previous",
+   "expect": {
+    "raises": "^'previous' names no window: the semantic model compares a window with the one just before it, asked as 'compared with the day before'"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), found by this round's probe: c7b61dd (and main) answered shift 2's speed, 657.6 ft/min, for a downtime question. 'How did this week go versus the previous one?' stays the KPI summary's (period-week-vs-previous)."
+  },
+  {
+   "id": "top-n-per-year-of-no-money-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons per year",
+   "expect": {
+    "raises": "^'year' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), found by this round's probe: 'per year' said of no money is a window the model does not read: c7b61dd (and main) answered the selected day, 2.15%. Said of money it stays the levers' yearly rate (top-n-a-year-is-a-rate-not-a-window)."
+  },
+  {
+   "id": "top-n-a-span-of-months-said-with-to-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime June to September",
+   "expect": {
+    "raises": "^'june to september' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: a span of months said with 'to' was the KPI tiles comparing June with September; 'compare June to September' compares them, as before."
+  },
+  {
+   "id": "top-n-versus-the-previous-n-weeks-names-the-span",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how did this week go versus the previous 4 weeks",
+   "expect": {
+    "raises": "^'previous 4 weeks' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: a span after 'previous' is its own words: an earlier draft of this round read it as a bare 'previous' and answered the KPI tiles."
+  },
+  {
+   "id": "top-n-a-ranking-versus-the-previous-one-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top reasons this week versus the previous one",
+   "expect": {
+    "raises": "^'previous' names no window: the semantic model compares a window with the one just before it, asked as 'this week compared with the week before'\\. Did you mean 'top reasons this week compared with the week before'"
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: the KPI tiles answer no ranking: an earlier draft of this round let them answer it; c7b61dd refused 'previous' as a word."
+  },
+  {
+   "id": "top-n-this-week-versus-previous-stays-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime this week vs previous",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       }
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime"
+    ]
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: a period route that answers the rest of the question carries the window before beside it, so 'versus previous' keeps it (c7b61dd's answer); an earlier draft of this round refused it."
+  },
+  {
+   "id": "top-n-top-n-in-number-words",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top thirty reasons this year",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=ytd&by=reason&rank=most&top=30",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 30
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "largest first, top 30 \\(the window holds 8 that rank\\)\\.$"
+    ]
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: N said in number words up to 200, as in digits: c7b61dd refused 'thirty' as a word the model does not read."
+  },
+  {
+   "id": "top-n-top-n-above-the-ranked-reasons",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 9 reasons this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=week&by=reason&rank=most&top=9",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 9
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Stacker had the most downtime this week, leaving out Planned maintenance and Power outage: \\*\\*42\\.93 min\\*\\*",
+     "largest first, top 9 \\(the window holds 8 that rank\\)\\.$"
+    ]
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: this week holds 10 reasons, 8 of which rank: the card said 'top 9.' with no word of how many rank."
+  },
+  {
+   "id": "top-n-cost-us-the-most-with-a-filter-after-it",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "which reason cost us the most in maintenance this month",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_usd&window=month&by=reason&rank=most&kind=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_usd",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {
+        "kind": "Maintenance"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Knife / slitter jam had the most downtime, priced, stop kind Maintenance this month: \\*\\*\\$4,142\\*\\*"
+    ],
+    "sections_not_match": "plant's default"
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: 'in maintenance' after 'most' is a filter, never the measure 'cost' would be the verb of: it ranked minutes '(the plant's default)'."
+  },
+  {
+   "id": "top-n-a-half-of-the-shift-offers-no-year",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "the first half of the shift downtime",
+   "expect": {
+    "raises": "^'first half' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
+   },
+   "note": "Issue #185, PR #186 round 1, the reviewer subagent's check of the fix round: a half of the shift is no half of the year: the year to date was offered."
   }
  ]
 }

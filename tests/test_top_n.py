@@ -4,7 +4,9 @@ window word the model cannot read is never answered as another window.
 The family test generates the owner's top-N questions (phrasings x kinds x windows x N x the page's scope x a shift named) and checks
 every answer's rows against a hand-written query over `stops`, independent of the router, the parser and the compiler: the same
 reasons in the same order, the same minutes to 0.1 and the same stop counts. The owner's calls (#172, 2026-11-15): top reasons rank
-by downtime minutes, the percent beside them, and five when no number is said.
+by downtime minutes, the percent beside them, and five when no number is said. The coordinator's review of PR #186 (round 1): N
+counts the reasons that rank, planned maintenance and a power outage shown apart beside them (item 5); "worst", "biggest" and "top"
+reasons read alike, as the ranking, with no carve-out for the owner's downtime review (item 7).
 """
 from datetime import date
 import json
@@ -34,7 +36,12 @@ PHRASINGS = (('{top} {kind}reasons {window}', True),
              ('{top} {kind}downtime reasons {window}', True),
              ('biggest {kind}problems {window}', False),
              ('worst {kind}reasons {window}', False),
+             ('worst {kind}downtime reasons {window}', False),     # item 7: "worst downtime reasons" is the ranking, never the review
+             ('biggest {kind}downtime reasons {window}', False),
+             ('{top} {kind}stop reasons {window}', True),           # item 6: "stop reasons" rank by downtime minutes too
              ('{kind}pareto {window}', False))
+# The reasons a ranking sets apart, shown beside the N it ranks: planned maintenance (schedule-driven) and a power outage (external)
+APART = ('Planned maintenance', 'Power outage')
 
 
 @pytest.fixture(scope='module')
@@ -43,7 +50,8 @@ def store():
 
 
 def oracle(store, window, kind, shift, n, measure='minutes'):
-    """The hand-written query: each stop reason's minutes and stops over the window, largest first, ties by name, the first n."""
+    """The hand-written query: each stop reason's minutes and stops over the window, largest first, ties by name; the first n reasons
+    that rank, with the reasons set apart (APART) that come before the n-th."""
     start, end = WINDOWS[window]
     where, params = ['production_date BETWEEN ? AND ?'], [start, end]
     if kind:
@@ -54,8 +62,14 @@ def oracle(store, window, kind, shift, n, measure='minutes'):
         params.append(shift)
     order = 'sum(seconds) DESC' if measure == 'minutes' else 'count(*) DESC'
     sql = (f"SELECT reason, sum(seconds) / 60.0 AS minutes, count(*) AS stops FROM stops WHERE {' AND '.join(where)} "
-           f"GROUP BY reason ORDER BY {order}, reason LIMIT ?")
-    return [(r['reason'], r['minutes'], r['stops']) for r in store._fetch(sql, params + [n], 100)]
+           f"GROUP BY reason ORDER BY {order}, reason")
+    out, ranked = [], 0
+    for r in store._fetch(sql, params, 100):
+        if ranked == n:
+            break
+        out.append((r['reason'], r['minutes'], r['stops']))
+        ranked += r['reason'] not in APART
+    return out
 
 
 def same_rows(got, want):
@@ -77,12 +91,6 @@ def family():
     return out
 
 
-def owners_review(question, kind, window, n_said, shift):
-    """The owner's downtime review keeps "top downtime reasons" over every kind with no number said (golden
-    owner-top-downtime-reasons-yesterday, issue #101): the flagship card ranks every reason itself, over the windows it reads."""
-    return kind is None and window != 'YTD' and 'downtime reasons' in question and not n_said
-
-
 def test_the_family_is_several_hundred():
     assert len(family()) >= 200   # each asked with the page on All and on shift 2: over four hundred answers
 
@@ -97,10 +105,7 @@ def test_every_top_n_answer_is_the_hand_written_query(store, scope):
     for question, kind, window, n, shift in family():
         context = Context(DAY, 2, scope=scope, period='day')
         request, asked = route(question, context, store.production_days, store)
-        n_said = bool(re.search(r'\btop [35]\b', question))
-        if owners_review(question, kind, window, n_said, shift) and (shift is None or request['intent'] == 'period_review'):
-            assert request['intent'] == 'period_review', (question, scope, request['intent'])   # the owner's review keeps it
-            continue
+        # every phrasing, "top downtime reasons" over every kind too: the ranking, never the owner's review (item 7)
         assert request['intent'] == 'semantic', (question, scope, request['intent'])
         args = request['plan'][0]['arguments']
         assert (args['measure'], args['group_by'], args['order'], args['limit']) == ('downtime_minutes', ['reason'], 'value', n), (question, args)
@@ -114,7 +119,7 @@ def test_every_top_n_answer_is_the_hand_written_query(store, scope):
         assert minutes == sorted(minutes, reverse=True), (question, got)
         assert same_rows(got, oracle(store, window, kind, shift, n)), (question, scope, got)
         checked += 1
-    assert checked >= 180
+    assert checked == len(family())
 
 
 def test_the_card_says_top_n_and_leads_with_the_first_row(store):
@@ -139,9 +144,14 @@ def test_the_card_says_top_n_and_leads_with_the_first_row(store):
         lead = next(r for i, r in enumerate(data['rows']) if i not in SemanticAnswer.apart(data))
         assert sections[0].startswith(f'{lead["label"]} had the most downtime'), (question, sections[0])
         read_as = next(s for s in sections if s.startswith('Read as'))
-        # the default said only when no word named the measure ("downtime reasons" names it)
+        # the default said only when no word named the measure ("downtime reasons" names it; "stop reasons" does not: item 6)
         assert ("ranked by downtime minutes (the plant's default)" in read_as) == ('downtime' not in question), (question, read_as)
-        holds = f' (the window holds {data["groups"]})' if data['groups'] < n else ''
+        # how many the window holds when fewer than N rank, from the hand-written query: the reasons that rank when some are set
+        # apart (the reviewer's check of PR #186 round 1), else every reason
+        every = oracle(store, window, kind, None, 100)
+        ranked = sum(reason not in APART for reason, _, _ in every)
+        holds = (f' (the window holds {ranked} that rank)' if ranked < len(every) and ranked < n else
+                 f' (the window holds {len(every)})' if len(every) < n else '')
         assert f'largest first, top {n}{holds}.' in read_as, (question, read_as)
         # one finding per row: the rows a ranking may lead with in the query's order, then the ones it sets apart
         apart = SemanticAnswer.apart(data)
@@ -169,11 +179,21 @@ def test_a_named_measure_or_unit_ranks_by_it(store, question, measure, limit):
     assert resolved['plan'] == request['plan'] and resolved.get('lead') == request.get('lead'), url
 
 
-@pytest.mark.parametrize('question, said', [('top 30 reasons this year', 'top 30 (the window holds {groups})'),
-                                            ('top 40 reasons by stops this year', 'top 40 (the window holds {groups})'),
-                                            ('top 3 reasons by stops this year', 'top 3')])
+# the year to date holds 10 stop reasons, 8 of which rank (planned maintenance and the power outage are set apart): the hand-written
+# query says so in test_the_year_holds_eight_reasons_that_rank
+@pytest.mark.parametrize('question, said', [('top 30 reasons this year', 'top 30 (the window holds 8 that rank)'),
+                                            ('top 40 reasons by stops this year', 'top 40 (the window holds 8 that rank)'),
+                                            ('top 3 reasons by stops this year', 'top 3'),
+                                            ('top 25 reasons this year', 'top 25 (the window holds 8 that rank)'),   # the default limit
+                                            ('top 25 orders by rejects this year', 'top 25'),
+                                            ('top 100 reasons this year', 'top 100 (the window holds 8 that rank)'),  # N up to 200
+                                            ('top 200 reasons by stops this year', 'top 200 (the window holds 8 that rank)'),
+                                            ('top thirty reasons this year', 'top 30 (the window holds 8 that rank)'),   # in number words
+                                            ('top twenty-five orders by rejects this year', 'top 25'),
+                                            ('top 9 reasons this week', 'top 9 (the window holds 8 that rank)')])
 def test_top_n_is_said_whatever_n(store, question, said):
-    """A ranking of N rows says "top N" for any N asked, the default limit's 25 aside (Codex on PR #186)."""
+    """A ranking of N rows says "top N" for any N asked (Codex on PR #186), the default limit's 25 too: that N was said rides on the
+    lead, and the address keeps top=25 (the review of PR #186, item 3); N is read in words up to MAX_LIMIT (item 4)."""
     request, asked = route(question, Context(DAY, 2, scope='day', period='day'), store.production_days, store)
     analysis = store.day_analysis(asked.production_day)
     try:
@@ -182,7 +202,62 @@ def test_top_n_is_said_whatever_n(store, question, said):
         analysis.close()
     data = next(s['data'] for s in result['trace'] if s['tool'] == S.TOOL)
     read_as = next(s for s in result['sections'] if s.startswith('Read as'))
-    assert read_as.endswith(f'largest first, {said.format(groups=data["groups"])}.'), read_as
+    assert read_as.endswith(f'largest first, {said}.'), read_as
+    n = int(re.search(r'top (\d+)', said)[1])
+    url = canonical_url(request, asked)
+    assert f'&top={n}' in url, url
+    assert resolve_url(url, store)['request'] == request   # the address carries the N said, the default's 25 too
+
+
+def test_the_year_holds_eight_reasons_that_rank(store):
+    every = oracle(store, 'YTD', None, None, 100)
+    assert (len(every), sum(reason not in APART for reason, _, _ in every)) == (10, 8)
+    week = [(r['reason'], r['minutes'], r['stops']) for r in store._fetch(
+        "SELECT reason, sum(seconds) / 60.0 AS minutes, count(*) AS stops FROM stops WHERE production_date BETWEEN ? AND ? GROUP BY reason",
+        ['2026-09-14', '2026-09-18'], 100)]
+    assert (len(week), sum(reason not in APART for reason, _, _ in week)) == (10, 8)
+
+
+@pytest.mark.parametrize('question, said', [('top 0 reasons last week', "'top 0' asks for no rows"),
+                                            ('top zero reasons last week', "'top zero' asks for no rows"),
+                                            ('top three hundred reasons this year', "'top three hundred' asks for more rows than a ranking lists"),
+                                            ('top 201 reasons this year', "'top 201' asks for more rows than a ranking lists"),
+                                            ('top 1000 orders by rejects this year', "'top 1000' asks for more rows than a ranking lists")])
+def test_top_0_or_more_than_the_model_lists_is_refused(store, question, said):
+    """N outside 1 to MAX_LIMIT is refused naming it, under either scope, never clamped to another N (the review of PR #186,
+    items 4 and 5: "top 0" answered the top 1, with a headline that named no reason)."""
+    for scope in ('day', 'shift'):
+        with pytest.raises(ValueError, match=re.escape(said) + f': a ranking lists from 1 to {S.MAX_LIMIT} rows'):
+            route(question, Context(DAY, 2, scope=scope, period='day'), store.production_days, store)
+
+
+@pytest.mark.parametrize('scope', ['day', 'shift'])
+def test_top_1_reason_is_the_largest_unplanned_one(store, scope):
+    """N counts the reasons that rank, planned maintenance shown apart (the review of PR #186, item 5): "top 1 reason last week" is
+    Missed splice, 103.43 min, with planned maintenance's 123.00 min beside it, the hand-written query's rows."""
+    request, asked = route('top 1 reason last week', Context(DAY, 2, scope=scope, period='day'), store.production_days, store)
+    args = request['plan'][0]['arguments']
+    assert (args['measure'], args['group_by'], args['limit']) == ('downtime_minutes', ['reason'], 1)
+    data = S.run(args, store)
+    got = [(r['reason'], r['value'], r['source_count']) for r in data['rows']]
+    assert same_rows(got, oracle(store, 'last week', None, None, 1))
+    assert [r['reason'] for r in data['rows']] == ['Planned maintenance', 'Missed splice']
+    from investigator.shapes import SemanticAnswer
+    assert [data['rows'][i]['reason'] for i in SemanticAnswer.apart(data)] == ['Planned maintenance']
+
+
+def test_the_rows_set_apart_are_read_beyond_the_limit_only_for_a_ranking_of_stops(store):
+    """The query reads the values a ranking of stops sets apart beyond its limit, and keeps N that rank; any other query reads its
+    limit (the receipt's LIMIT is the query's own)."""
+    week = {'period': 'week', 'anchor': '2026-09-07'}
+    stops = S.validate(S.SemanticQuery('downtime_minutes', window=week, group_by=['reason'], limit=3), store)
+    assert S.apart_slack(S.model(), stops) == 2   # Planned maintenance and Power outage
+    rows = S.run(stops, store)['rows']
+    assert sum(not S.set_apart('stop', r['lever'], 'controllable') for r in rows) == 3
+    setups = S.validate(S.SemanticQuery('setups', window=week, group_by=['grade'], limit=3), store)
+    assert S.apart_slack(S.model(), setups) == 0 and len(S.run(setups, store)['rows']) == 3
+    by_day = S.validate(S.SemanticQuery('downtime_minutes', window=week, group_by=['day'], limit=3), store)
+    assert S.apart_slack(S.model(), by_day) == 0   # a time split lists its days in order: nothing to set apart
 
 
 @pytest.mark.parametrize('question, measure', [('top maintenance reasons last week', 'downtime_minutes'),
@@ -202,6 +277,29 @@ def test_the_year_to_date_splits_by_day_but_never_by_a_longer_grain(store):
     for grain in ('week', 'month', 'period'):
         with pytest.raises(S.SemanticError, match='ends on a part'):
             S.validate({**args, 'group_by': [grain]}, store)
+
+
+@pytest.mark.parametrize('question, measure, limit', [
+    ('top stop reasons YTD', 'downtime_minutes', 5),           # item 6: "stop reasons" rank by downtime minutes, like any reasons
+    ('top stop reason this week', 'downtime_minutes', S.DEFAULT_LIMIT),
+    ('top stop reasons by stops YTD', 'stops', 5),             # ... and only "by stops" or "most stops" counts them
+    ('which reason cost us the most this month', 'downtime_usd', S.DEFAULT_LIMIT),   # "cost us the most": the money, priced downtime
+    ('which reasons cost the most this week', 'downtime_usd', 5),
+])
+def test_the_owners_rules_for_stop_reasons_and_cost(store, question, measure, limit):
+    """The coordinator's defaults from the owner's 15 Nov calls (the review of PR #186, item 6; the owner can overrule at merge)."""
+    for scope in ('day', 'shift'):
+        request, asked = route(question, Context(DAY, 2, scope=scope, period='day'), store.production_days, store)
+        assert request['intent'] == 'semantic', (question, scope, request['intent'])
+        args = request['plan'][0]['arguments']
+        assert (args['measure'], args['group_by'], args['limit']) == (measure, ['reason'], limit), (question, args)
+        assert resolve_url(canonical_url(request, asked), store)['request'] == request
+
+
+def test_cost_with_a_measure_said_after_it_is_the_verb(store):
+    """"Which reason cost the most minutes": the minutes, the Pareto's own answer (the looks every stop card offers ask it)."""
+    request, _ = route('which reason cost the most minutes this week', Context(DAY, 2, scope='day', period='day'), store.production_days, store)
+    assert request['intent'] == 'period_pareto' and request['plan'][0]['arguments'].get('measure') != 'count', request
 
 
 def test_stops_by_reason_match_the_hand_written_query(store):
@@ -303,6 +401,13 @@ def test_a_ytd_answer_reads_the_year_and_is_its_own_address(store):
     'top maintenance reasons this quarter',
     'top downtime reasons over the last 30 days',
     'top reasons last year',
+    # the review of PR #186, item 1: each answered as another window at c7b61dd
+    'top operator reasons Q3', 'top operator reasons in Q2', 'top operator reasons QTD', 'top operator reasons FYTD',
+    'top operator reasons H1', 'top operator reasons first half', 'top operator reasons since Monday',
+    'top operator reasons since 1 Jan', 'top operator reasons lately', 'top operator reasons annually', 'downtime since June',
+    'downtime month-to-date', 'downtime week-to-date', 'downtime rolling 4 weeks', 'downtime trailing 30 days',
+    'downtime last fifteen days', 'downtime recently', 'downtime January through September', 'downtime between June and August',
+    'downtime from June to August', 'top operator reasons per year',
 ])
 def test_an_unread_window_is_refused_never_answered_as_another(store, question):
     """Change 4: the hand route answered the selected day (main: the day's review for "month to date"); the parser's reason and the
@@ -316,14 +421,48 @@ def test_an_unread_window_is_refused_never_answered_as_another(store, question):
             assert request['intent'] == 'semantic', ask
 
 
+@pytest.mark.parametrize('question, word, grain', [
+    ('Downtime last week vs previous', 'previous', 'week'), ('trim last week vs previous', 'previous', 'week'),
+    ('speed last month vs previous', 'previous', 'month'), ('msf last month vs previous', 'previous', 'month'),
+    ('waste last month vs previous', 'previous', 'month'), ('how did last week compare to previous', 'previous', 'week'),
+    ('downtime last week compared to prior', 'prior', 'week'),
+])
+def test_previous_or_prior_is_the_word_refused_never_the_window_beside_it(store, question, word, grain):
+    """The review of PR #186, item 2: "'last week' is not a window the semantic model reads" was false; the word the model cannot
+    read is "previous" or "prior", and the refusal names it and how a comparison is asked, which answers."""
+    for scope in ('day', 'shift'):
+        with pytest.raises(ValueError) as refused:
+            route(question, Context(DAY, 2, scope=scope, period='day'), store.production_days, store)
+        text = str(refused.value)
+        assert text.startswith(f"'{word}' names no window: the semantic model compares a window with the one just before it, asked as "
+                               f"'this {grain} compared with the {grain} before'"), text
+        assert 'is not a window the semantic model reads' not in text, text
+    request, _ = route(f'downtime this {grain} compared with the {grain} before', Context(DAY, 2, scope='day', period='day'),
+                       store.production_days, store)
+    assert request['intent'] != 'semantic' or request['plan'][0]['arguments']['compare'] == 'previous'
+
+
+def test_two_windows_of_one_grain_offer_the_one_against_the_one_before(store):
+    with pytest.raises(ValueError) as refused:
+        route('top maintenance reasons last week and this week', Context(DAY, 2, scope='day', period='day'), store.production_days, store)
+    assert str(refused.value).startswith("'last week' and 'this week' are two windows"), str(refused.value)
+    offered = re.findall(r"'([^']+)'", str(refused.value).split('Did you mean', 1)[1])
+    assert offered == ['top maintenance reasons this week compared with the week before']
+    request, _ = route(offered[0], Context(DAY, 2, scope='day', period='day'), store.production_days, store)
+    args = request['plan'][0]['arguments']
+    assert (request['intent'], args['compare'], args['filters'], args['window']['period']) == ('semantic', 'previous', {'kind': 'Maintenance'}, 'week')
+
+
 @pytest.mark.parametrize('question, intent', [
     ('How many stops this week and last week?', 'period_quantity'),     # the quantity routes read their own windows
     ('Side trim trend over the last eight weeks', 'period_trend'),
     ('Show downtime by reason on Monday', 'downtime'),                # the selected day said by its weekday
+    ('How did this week go versus the previous one?', 'period_compare'),   # the KPI summary reads "the previous one" itself
+    ('what is trim costing us annually', None),                        # a year said as a rate of money: the levers' yearly figure
 ])
 def test_a_route_that_reads_its_window_keeps_it(store, question, intent):
     request, _ = route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
-    assert request['intent'] == intent
+    assert request['intent'] == intent if intent else request['intent'] != 'semantic', (question, request['intent'])
 
 
 # ------------------------------------------------------------------ the model's entries

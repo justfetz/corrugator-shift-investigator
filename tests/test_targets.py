@@ -75,7 +75,7 @@ def test_the_owners_sixty_minute_shift_is_a_flag_five_times_target():
     ('Show dry-end quality waste', 'shift', 'day', 'dry_end_band_text'),
     ('Waste breakdown for the week', 'day', 'day', 'band_text'),
     ('Trend of trim over eight weeks', 'day', 'day', 'band_text'),
-    ('What were the top downtime reasons this week?', 'day', 'day', 'op_maint_band_text'),
+    ('What were the downtime reasons this week?', 'day', 'day', 'op_maint_band_text'),   # 'top ... reasons' ranks (PR #186)
     ("What's trim costing us this month?", 'day', 'day', 'band_text'),
 ])
 def test_every_banded_headline_shows_its_band_beside_its_figure(store, question, scope, period, field):
@@ -258,7 +258,7 @@ def test_yesterday_moves_to_the_previous_production_day_and_answers_the_review_t
     """"Yesterday" is the production day before the selected one, and the question moves the controls to it (issue #105);
     the owner's default downtime answer for that day, all shifts, is the review."""
     for period in ('day', 'month'):
-        request, context = route('What were the top downtime reasons yesterday?', Context('2026-09-29', 2, scope='day', period=period),
+        request, context = route('What were the downtime reasons yesterday?', Context('2026-09-29', 2, scope='day', period=period),
                                  store.production_days)
         assert context.production_day == '2026-09-28' and request['plan'] == [
             {'tool': 'get_downtime_review', 'arguments': {'window': {'period': 'day', 'anchor': '2026-09-28'}, 'shift': None}}]
@@ -295,11 +295,13 @@ def test_downtime_with_no_scope_is_the_selected_day_all_shifts(store):
     def address(question, day='2026-09-14', scope='shift', period='day'):
         request, context = route(question, Context(day, 2, scope=scope, period=period), days)
         return canonical_url(request, context)
-    for question in ('Show downtime by reason', 'How much downtime?', 'What were the top downtime reasons?'):
+    # "top downtime reasons" is the semantic ranking since PR #186 (worst, biggest and top reasons read alike); the review
+    # answers the reasons asked with no ranking word
+    for question in ('Show downtime by reason', 'How much downtime?', 'What were the downtime reasons?'):
         for scope in ('shift', 'day'):
             assert address(question, scope=scope) == '/corr/1/day/2026-09-14?measure=review', (question, scope)
     for scope in ('shift', 'day'):
-        assert address('What were the top downtime reasons yesterday?', scope=scope) == '/corr/1/day/2026-09-11?measure=review', scope
+        assert address('What were the downtime reasons yesterday?', scope=scope) == '/corr/1/day/2026-09-11?measure=review', scope
     assert address('Show downtime by reason', day='2026-09-21') == '/corr/1/day/2026-09-21?measure=review'
     assert address('Show downtime by reason', day=days[0]) == f'/corr/1/day/{days[0]}?measure=review'
     for question, url in (('Show downtime by reason for this shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
@@ -324,8 +326,9 @@ def test_downtime_with_no_scope_is_the_selected_day_all_shifts(store):
                           ('Why was this shift slow?', '/corr/1/day/2026-09-14/shift/2?measure=overview')):
         assert address(question) == url, question
     assert address('Show downtime by reason', period='week') == '/corr/1/week/2026-09-14?measure=review'
-    assert address('What were the top downtime reasons yesterday?', period='week') == '/corr/1/day/2026-09-11?measure=review'   # yesterday is Day
-    assert address('What were the top downtime reasons for all shifts?') == '/corr/1/day/2026-09-14?measure=review'   # "all shifts" names no one shift
+    assert address('What were the downtime reasons yesterday?', period='week') == '/corr/1/day/2026-09-11?measure=review'   # yesterday is Day
+    # "all shifts" names no one shift: every shift's ranking of the reasons, the semantic one since PR #186 ("top ... reasons")
+    assert address('What were the top downtime reasons for all shifts?') == '/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5'
     assert redirect_for('/corr/1/day/2026-09-14/shift/2?measure=downtime', store) is None
     # the analyst is told which scope the default chose, and why
     scoped = question_scope('Show downtime by reason', Context('2026-09-14', 2), days)

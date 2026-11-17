@@ -1017,6 +1017,7 @@ class Compiled:
             from .record_store import previous_window
             self.previous = previous_window(query.window['period'], start, end)
         self.zero_fill = zero_fill and _fills_zeros(mdl, query)
+        self.extra = apart_slack(mdl, query)   # the rows a ranking of stops sets apart, read beyond its limit (`run` keeps N that rank)
         self.statements = []
         if query.group_by:
             self.statements.append(Statement('groups', *self._sql(query.group_by, grouped=True)))
@@ -1075,7 +1076,7 @@ class Compiled:
         """One statement: the window's rows, and with compare the previous window's value beside each row (and the
         change of the total), joined in DuckDB on the row's dimensions; ordered and limited."""
         keys = [f'd{i}' for i in range(len(dims))]
-        limit = self.query.limit if grouped else 1
+        limit = self.query.limit + self.extra if grouped else 1
         sql, params = self._body(dims, self.window, grouped)
         if self.previous is None:
             return f'SELECT * FROM ({sql}) cur' + self._order(keys) + ' LIMIT ?', params + [limit]
@@ -1139,6 +1140,45 @@ class Compiled:
             return f' ORDER BY {by_keys}'
         direction = 'DESC' if order == 'value' else 'ASC'
         return f' ORDER BY value {direction} NULLS LAST, {by_keys}'
+
+
+# The levers a ranking of stops never leads with (the owner, docs/METRICS.md): planned maintenance is schedule-driven, a power outage
+# external (PR #111); a ranking shows them apart from the rows it ranks
+SET_APART = ('schedule-driven', 'external')
+
+
+def set_apart(entity, row_lever, lever):
+    """True for a row a ranking of stops sets apart: its lever is schedule-driven or external, and not the measure's own (planned
+    maintenance minutes by reason rank planned maintenance)."""
+    return entity == 'stop' and row_lever in SET_APART and row_lever != lever
+
+
+def apart_slack(mdl, query):
+    """How many rows beyond its limit a ranking of stops by one dimension reads: the values of that dimension a ranking sets apart
+    (planned maintenance and a power outage among the stop reasons), so its limit counts the rows it ranks and the ones set apart are
+    shown beside them (the review of PR #186, item 5: "top 1 reason" names the largest unplanned reason, never only planned
+    maintenance). Zero for any other query."""
+    if len(query.group_by) != 1 or query.order not in ('value', 'value_asc') or query.share is not None:
+        return 0
+    entity = mdl.measure_entities(query.measure)[0]
+    if entity != 'stop':
+        return 0
+    dim, lever = query.group_by[0], _lever(mdl, query.measure, {}, query.filters)
+    spec = mdl.dimensions[dim]
+    values = set(spec.get('value_levers') or {}) | (_external_values(spec['external']) if spec.get('external') else set())
+    return sum(1 for value in values if set_apart(entity, mdl.value_lever(dim, value), lever))
+
+
+def _ranked(rows, limit, entity, lever):
+    """The rows of a ranking read `apart_slack` rows beyond its limit: the first `limit` it ranks, with the rows set apart that come
+    before the last of them."""
+    kept, ranked = [], 0
+    for row in rows:
+        if ranked == limit:
+            break
+        kept.append(row)
+        ranked += not set_apart(entity, row.get('lever'), lever)
+    return kept
 
 
 def _fills_zeros(mdl, query):
@@ -1246,7 +1286,7 @@ def run(query, store, rates=None, mdl=None):
     trace = {'sql': [], 'parameters': []}
     fetched = {}
     for statement in compiled.statements:
-        fetched[statement.name] = _fetch(store, statement.sql, statement.params, MAX_LIMIT + 1)
+        fetched[statement.name] = _fetch(store, statement.sql, statement.params, MAX_LIMIT + 1 + compiled.extra)
         trace['sql'].append(statement.sql)
         trace['parameters'].append([_plain(p) for p in statement.params])
     rates = cost_model.effective(rates) if m['agg'] == 'priced' and (rates is None or 'values' not in rates) else rates
@@ -1274,6 +1314,14 @@ def run(query, store, rates=None, mdl=None):
 
     rows = [build(r) for r in fetched.get('groups', [])]
     groups = fetched['groups'][0]['groups'] if fetched.get('groups') else 0
+    ranked_groups = None
+    if compiled.extra:
+        # N counts the rows the ranking ranks; the rows it sets apart that come before the N-th are shown beside them. When every
+        # row was read, how many of them rank is known: a card says "top 9 (the window holds 8 that rank)"
+        entity, lever = mdl.measure_entities(query.measure)[0], _lever(mdl, query.measure, {}, query.filters)
+        if len(rows) >= groups:
+            ranked_groups = sum(not set_apart(entity, row.get('lever'), lever) for row in rows)
+        rows = _ranked(rows, query.limit, entity, lever)
     total = _reading(mdl, query, total_row, rates, basis, {}) if total_row else {'value': None}
     _check_adds_up(mdl, query, rows, groups, total)
     share_row = None
@@ -1294,6 +1342,7 @@ def run(query, store, rates=None, mdl=None):
             'dataset_version': store.content_hash, 'coverage': window['coverage'] if not previous else
             ('complete' if window['coverage'] == previous['coverage'] == 'complete' else 'unavailable' if window['coverage'] == 'unavailable' else 'partial'),
             'excluded_records': [], 'rows': rows, 'groups': groups, 'rows_shown': len(rows),
+            **({'ranked_groups': ranked_groups} if ranked_groups is not None else {}),   # the rows of the window a ranking ranks
             'limit': query.limit}   # the rows asked (a card's "top 5" is this figure, issue #185)
     if query.share is not None:
         data['share_row'] = share_row   # the index of the asked value's row (the last when the limit or no records left it out)
@@ -1507,7 +1556,9 @@ def model_markdown(text=None):
     out += ['', '## Default rankings', '',
             'A ranking of a dimension that names no measure ranks it by the measure the model gives it (issue #185), and a ranking of '
             'the dimension as a set ("top reasons") with no number asked lists its default top N. A measure named keeps it ("top 5 '
-            'reasons by stops"); the ranking words beside are read as the ranking.', '',
+            'reasons by stops"), and the dimension\'s own words never name one ("top stop reasons" rank by the default too, PR #186); '
+            'the ranking words beside are read as the ranking. N counts the rows a ranking ranks: a ranking of stops shows planned '
+            'maintenance and a power outage apart beside them (`apart_slack`).', '',
             '| Dimension | Ranked by | Top N when unsaid | Ranking words | Why |', '| --- | --- | --- | --- | --- |']
     for d in dims:
         rank_by = d.get('rank_by')

@@ -117,7 +117,7 @@ Modifiers, each refused when it does not apply to the measure:
 | `against=` | `speedvar` only: `baseline` (each grade's trailing-year baseline at the usual grade mix, issue #101; `target`, its old name, redirects to it), `previous` (the previous window of the same grain), `shift` (needs `shifts=` with two shifts, the one explained first: `shifts=3,1`; refused under one shift, which cannot read another) | `baseline` |
 | `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's); a store measure takes one, except `kpis`, and `pareto` and `waste` under a ranged grain, which run once per shift, and `speedvar`, which runs once per shift (or, with `against=shift`, takes exactly two) | all three for day plans, all shifts together for store tools |
 | `rank=` | `rank`: `speed`, `downtime`, `quality`; `semantic` (issue #144): `most` (largest first) or `least` (smallest first), with `by=`, and the card names the first row | all three; for `semantic` the query's own order, unranked |
-| `top=` | `semantic` only (issue #144): the first N rows of the split, 1 to 200, with `by=` ("top 3 stop reasons by downtime") | every row (25 listed) |
+| `top=` | `semantic` only (issue #144): the first N rows of the split, 1 to 200, with `by=` ("top 3 stop reasons by downtime"); a ranking of stops counts the N it ranks, with planned maintenance and a power outage shown apart beside them (PR #186). `top=25`, the default limit, is written when the question said it, and the card says "top 25" | every row (25 listed) |
 | `vs=` | `semantic` only: two values of the single `by=` dimension, compared ("scrap on shift 1 versus shift 2": `vs=1,2`; "setups on 32-C and 26-C": `vs=32-C,26-C`); without `rank=` or `share=` | none |
 | `share=` | `semantic` only (issue #144): one value of the single `by=` dimension (not a time dimension), for a count or a sum, the query's `share` field; the card opens with its share of the total ("what percent of stops were at the stacker"). `each`: every row's share, the card opening with the largest ("percent of stops by kind") | none |
 | `lens=` | `supervisor` (the controllable losses ranked; side trim and planned maintenance schedule-driven, then a power outage external, after), `ownership` (the total cost of waste, side trim first, every waste line priced once, the dry-end kinds under one tag-scrap subtotal), for `money` (issue #101) | every lever ranked |
@@ -203,7 +203,7 @@ shows the refusal of its `.json`.
 | "What were the top 3 contributors to speed variations?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=speedvar` |
 | "What drove speed this week versus last week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=speedvar&window=week&against=previous` |
 | "Why did speed differ on shift 3 versus shift 1 this week?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1` |
-| "What were the top downtime reasons yesterday?" — Day 2026-09-29, all shifts | `/corr/1/day/2026-09-28?measure=review` |
+| "What were the downtime reasons yesterday?" — Day 2026-09-29, all shifts | `/corr/1/day/2026-09-28?measure=review` |
 | "Where's my biggest opportunity this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month&lens=supervisor` |
 | "What's trim costing us this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |

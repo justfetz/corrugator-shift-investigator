@@ -143,8 +143,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                 params.append(('by', ','.join(first['group_by'])))
             if lead.get('rank'):
                 params.append(('rank', lead['rank']))   # issue #144: a ranked question keeps its ranking
-            if first.get('limit', semantic.DEFAULT_LIMIT) != semantic.DEFAULT_LIMIT:
-                params.append(('top', str(first['limit'])))
+            if first.get('limit', semantic.DEFAULT_LIMIT) != semantic.DEFAULT_LIMIT or lead.get('top'):
+                params.append(('top', str(first['limit'])))   # "top 25", the default limit asked, too (the review of PR #186, item 3)
             if first.get('share') is not None:
                 params.append(('share', _semantic_text(first['share'])))   # one value's share: the query's own field
             elif lead.get('shares'):
@@ -625,6 +625,8 @@ def _semantic(fields, context, window, shifts, store):
         if not re.fullmatch(r'[1-9]\d{0,2}', fields['top']) or int(fields['top']) > semantic.MAX_LIMIT or not group_by:
             raise ValueError(f'top is a number of rows from 1 to {semantic.MAX_LIMIT}, with by=<dimension>')
         limit = int(fields['top'])
+        if limit == semantic.DEFAULT_LIMIT:
+            lead['top'] = True   # top=25: the default limit asked as N, which the card says ("top 25")
     share = fields.get('share')
     if share == 'each':   # every row's share of the total: the card leads with the largest share (the review of PR #155)
         if len(group_by) != 1:
