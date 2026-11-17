@@ -210,7 +210,8 @@ other case passes 53 ms. The three shifts' money with the day's total
 (`money-day-ranks-shifts-without-the-outage`, PR #111: seven tool calls, the day pricing each shift
 again) runs 210 ms in-process and 204 ms over GET in a warm, uncontended run, and 236–294 ms over GET
 run alone, so it carries the same 500, as does the same question on 2025-08-21
-(`money-day-side-trim-schedule-driven`, issue #135: 203–207 ms in-process, 212–241 ms over GET, uncontended).
+(`money-day-side-trim-schedule-driven`, issue #135: 203–207 ms in-process, 212–241 ms over GET, uncontended). So does `top-n-top-25-orders-says-top-25` (PR #186): every dry-end reject of the year to date ranked by
+order, 241–312 ms in-process run alone.
 Under about 2x CPU contention (four busy loops on the
 four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
 418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,

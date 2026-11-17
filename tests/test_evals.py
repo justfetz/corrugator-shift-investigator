@@ -301,7 +301,8 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                # of one 4-4-5 period, two turns (PR #168's fix round)
                'money-day-shift-lines-add-to-the-headline', 'money-day-shift-lines-add-up-28-sep', 'money-no-yearly-figure-from-one-day',
                'money-day-trim-by-shift-inside-the-band', 'money-ptd-label-names-its-end-day', 'money-period-operator-tile-is-the-ledger',
-               'money-kpi-waste-tiles-are-the-ownership-lines'}   # a week's KPI card and its ownership lens, two turns: 136 ms uncontended
+               'money-kpi-waste-tiles-are-the-ownership-lines',   # a week's KPI card and its ownership lens, two turns: 136 ms uncontended
+               'top-n-top-25-orders-says-top-25'}   # every dry-end reject of the year to date ranked by order: 241-312 ms alone (PR #186)
 # Nested windows as printed (the coordinator's review of 82c0994 on PR #168): one address a turn, each day of a week or a month,
 # each week of a period, then the window; each turn is a money card of its own with its period to date priced, so a case over
 # 250 ms carries 150 ms a turn, 500 at the least. Measured in-process / over GET on a shared 2-CPU box, three runs: September's

@@ -25056,9 +25056,10 @@
     ],
     "sections_match": [
      "^Read as: dry-end rejects in sq ft by order, Year to date, 1 Jan–14 Sep 2026 \\(2026-01-01 to 2026-09-14\\), all shifts, largest first, top 25\\.$"
-    ]
+    ],
+    "max_ms": 500
    },
-   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 3: N = 25 is the default limit, and c7b61dd read it as 'the first 25'. That N was said rides on the lead, and the address keeps top=25."
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 3: N = 25 is the default limit, and c7b61dd read it as 'the first 25'. That N was said rides on the lead, and the address keeps top=25. It carries max_ms 500: every dry-end reject of the year to date ranked by order is the heaviest single semantic query of the set, 241-312 ms in-process run alone (c7b61dd's query, the same SQL)."
   },
   {
    "id": "top-n-top-25-reasons-says-top-25",
