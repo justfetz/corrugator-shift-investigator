@@ -2207,8 +2207,9 @@ class SemanticAnswer:
         if self.lead.get('rank'):
             parts.append(('largest' if self.lead['rank'] == 'most' else 'smallest') + ' first')
         limit = data['query'].get('limit')
-        if self.lead.get('rank') and limit is not None and limit < SEMANTIC_DEFAULT_LIMIT:
-            # a ranking of N rows says so (issue #185: "top 5"), and how many the window holds when that is fewer
+        if self.lead.get('rank') and limit is not None and limit != SEMANTIC_DEFAULT_LIMIT:
+            # a ranking of N rows asked says so (issue #185: "top 5", "top 30"), and how many the window holds when that is fewer
+            # (Codex on PR #186: N at or above the default limit was read as "the first N", or not at all)
             parts.append(f'{"top" if self.lead["rank"] == "most" else "bottom"} {n(limit)}' +
                          ('' if limit < data['groups'] else f' (the window holds {n(data["groups"])})' if data['groups'] < limit else ''))
         elif limit is not None and limit < data['groups'] and limit <= data['rows_shown']:

@@ -169,6 +169,22 @@ def test_a_named_measure_or_unit_ranks_by_it(store, question, measure, limit):
     assert resolved['plan'] == request['plan'] and resolved.get('lead') == request.get('lead'), url
 
 
+@pytest.mark.parametrize('question, said', [('top 30 reasons this year', 'top 30 (the window holds {groups})'),
+                                            ('top 40 reasons by stops this year', 'top 40 (the window holds {groups})'),
+                                            ('top 3 reasons by stops this year', 'top 3')])
+def test_top_n_is_said_whatever_n(store, question, said):
+    """A ranking of N rows says "top N" for any N asked, the default limit's 25 aside (Codex on PR #186)."""
+    request, asked = route(question, Context(DAY, 2, scope='day', period='day'), store.production_days, store)
+    analysis = store.day_analysis(asked.production_day)
+    try:
+        result = Agent(analysis).ask(question, asked, request=request)
+    finally:
+        analysis.close()
+    data = next(s['data'] for s in result['trace'] if s['tool'] == S.TOOL)
+    read_as = next(s for s in result['sections'] if s.startswith('Read as'))
+    assert read_as.endswith(f'largest first, {said.format(groups=data["groups"])}.'), read_as
+
+
 @pytest.mark.parametrize('question, measure', [('top maintenance reasons last week', 'downtime_minutes'),
                                                ('top maintenance reasons by percent last week', 'downtime_pct'),
                                                ('top reasons in dollars last week', 'downtime_usd')])
