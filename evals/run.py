@@ -705,6 +705,24 @@ def semantic_failures(question, url):
     return failures
 
 
+def as_read(question, url):
+    """`question` with the words the router reads otherwise read as it reads them (the coordinator's review of PR #186, round 2): each
+    window word said short as the words it shortens (the model's `windows.shorthand`: "last wk" is last week, data the harness reads
+    too), and a year beside a month's name consumed when the URL answers that month of that year (`window=YYYY-MM`), never when it
+    answers another year's month."""
+    words = semantic.model().shorthand
+    text = question
+    if words:
+        text = re.sub(r"(?<![\w-])(" + '|'.join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")(?![\w-])",
+                      lambda m: words[m[1].lower()], text, flags=re.I)
+    month = url_window(url or '')[1]
+    if month:
+        names = _MONTHS[3:-1].split('|')
+        text = re.sub(rf'\b({_MONTHS})\s*,?\s+(?:of\s+)?((?:19|20)\d\d)\b',
+                      lambda m: m[1] if f'{m[2]}-{names.index(m[1].lower()) + 1:02d}' == month else m[0], text, flags=re.I)
+    return text
+
+
 def catch_all_failures(question, url):
     """A question naming a countable noun or a unit, or asking "how many" of anything, that resolved to the KPI summary; or a
     quantity asked ("how many", "how much", "how long", a unit) that resolved to the overview or the summary, which answer "why
@@ -712,6 +730,7 @@ def catch_all_failures(question, url):
     for a breakdown, a grouping, a comparison of shifts or a ranked shift; or a quantity measure (one quantity, the stops of each
     production day) answered for the selected shift when the question names none (round 4, items 1, 5, 7 and 8)."""
     failures = []
+    question = as_read(question, url)   # "last wk", "September 2026" (PR #186, round 2)
     if re.search(r'[?&]measure=quantity(&|$)', url or ''):
         grouped = re.search(GROUPED_ASK, question, re.I) or re.search(RANKED_SHIFT, question, re.I)
         if grouped:

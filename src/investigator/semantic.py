@@ -332,6 +332,17 @@ class Model:
         if periods != list(WINDOW_PERIODS):
             raise ValueError('semantic model: the windows block lists the periods ' + ', '.join(WINDOW_PERIODS) + ', in that order')
         self.windows = {p['name']: p for p in self.spec['windows']['periods']}
+        # window words said short ("wk", "Sept", "PTD", "Q-3") and the windows after the selected day ("next week"): read by the hand
+        # router and the parser alike (agent.read_shorthand, semantic_parse), as entries of this file (PR #186, round 2, item 5)
+        shorthand = (self.spec['windows'].get('shorthand') or {}).get('words', {})
+        if not isinstance(shorthand, dict) or not all(isinstance(k, str) and k == k.lower().strip() and k and isinstance(v, str) and v.strip()
+                                                      for k, v in shorthand.items()):
+            raise ValueError('semantic model: a window word said short maps lower-case text to the words it shortens')
+        self.shorthand = dict(shorthand)
+        future = (self.spec['windows'].get('future') or {}).get('words', [])
+        if not all(isinstance(w, str) and w == w.lower().strip() and w for w in future):
+            raise ValueError('semantic model: a window after the selected day is lower-case text')
+        self.future = list(future)
         self.levers = {name: self._measure_lever(name, m) for name, m in self.measures.items()}
         self._check_levers()
 
@@ -1577,6 +1588,12 @@ def model_markdown(text=None):
     for w in windows['periods']:
         words = ', '.join(w.get('words') or w.get('examples', []))
         out.append(f'| `{w["name"]}` | {_cell(w["label"])} | {_cell(w["description"])} | {_cell(words)} |')
+    if windows.get('shorthand'):
+        out += ['', '### Said short', '', windows['shorthand']['about'], '', '| Said | Read as |', '| --- | --- |']
+        out += [f'| {_cell(said)} | {_cell(reads)} |' for said, reads in windows['shorthand']['words'].items()]
+    if windows.get('future'):
+        out += ['', '### After the selected day', '', windows['future']['about'], '',
+                'Refused: ' + _cell(', '.join(f'"{w}"' for w in windows['future']['words'])) + '.']
     out += ['', '## Synonyms', '',
             'The plant\'s own words for a measure, a dimension or a dimension\'s value. The offline router reads a question with '
             'these (issue #144, `semantic_parse.py`): a question in the model\'s words, or in these, answers with the measure, '

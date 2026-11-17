@@ -211,7 +211,11 @@ other case passes 53 ms. The three shifts' money with the day's total
 again) runs 210 ms in-process and 204 ms over GET in a warm, uncontended run, and 236–294 ms over GET
 run alone, so it carries the same 500, as does the same question on 2025-08-21
 (`money-day-side-trim-schedule-driven`, issue #135: 203–207 ms in-process, 212–241 ms over GET, uncontended). So does `top-n-top-25-orders-says-top-25` (PR #186): every dry-end reject of the year to date ranked by
-order, 241–312 ms in-process run alone.
+order, 241–312 ms in-process run alone, and so do the rankings of 200 orders on each scope (278–341 ms in-process, 234–294 ms
+over GET), of the customers' rejects (`top-n-top-200-customers-answers-in-full`, 41 rows, 264–293 / 210–246 ms) and of 40 customers
+(`top-n-top-40-customers-answers-in-full`, 255–272 / 222–227 ms), each run alone three times (PR #186, round 2: every top N up
+to the model's 200 answers in full). The ranking of the year's 183 production days (`top-n-top-200-days-answers-in-full`, 136–148 /
+95–130 ms alone, 44–56 ms warm) states the default, 250 ms (`STATED_DEFAULT_CASES` in `tests/test_evals.py`).
 Under about 2x CPU contention (four busy loops on the
 four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
 418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,

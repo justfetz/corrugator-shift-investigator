@@ -203,6 +203,9 @@ BARE_PREVIOUS = (r"\b(?:versus|vs\.?|compared?\s+(?:to|with)|comparing\s+(?:to|w
 # The window words the model does read that a comparison or a second window kept the scope from moving to ("last week vs previous",
 # "last week and this week"): never called a window the model does not read (item 2)
 RELATIVE_READ = r"(?:last|previous|prior)\s+(?:production\s+)?(?:week|month|(?:accounting\s+)?period)"
+# ... and "the last week", "the last month": the trailing week or month (agent.ROLLING_WINDOW), never moved to the window before, so a
+# rolling window the records do not keep, in the router's own words, with the window before offered (PR #186, round 2, item 4)
+ROLLING_LAST = r"\bthe\s+last\s+(?:production\s+)?(week|month|(?:accounting\s+|4-4-5\s+|fiscal\s+)?period)\b(?!\s+of\b)"
 # ... of which these are never the selected day, so a hand route that answers the selected day for them answers another window (round 5
 # of the coordinator's notes on #144): refused over it. A weekday is one when it is not the selected day's ("on Monday" on a Monday is
 # that day; "Mondays" asks a weekday profile, not a window).
@@ -436,6 +439,20 @@ def ytd_pattern(mdl=None):
     return _YTD[id(mdl)]
 
 
+_FUTURE = {}
+
+
+def future_pattern(mdl=None):
+    """The windows after the selected day (the model's `windows.future`: "next week", "next month"), a preposition before them consumed
+    with them ("for next week"); the words said are the group `words`."""
+    mdl = mdl or semantic.model()
+    if id(mdl) not in _FUTURE:
+        words = sorted(mdl.future, key=len, reverse=True) or ['(?!)']
+        alternatives = [r'\s+'.join(re.escape(t) for t in w.split()) if w != '(?!)' else w for w in words]
+        _FUTURE[id(mdl)] = r"\b(?:(?:for|over|in|during|across|through)\s+)?(?:the\s+)?(?P<words>" + '|'.join(alternatives) + r")\b"
+    return _FUTURE[id(mdl)]
+
+
 # "A year", "per year" said as a rate, never a window (issue #185)
 RATE_SAID = r"\b(?:a|an|per|each|every)\s+(?:year|quarter)\b"
 # The windows a question offered in place of a window the model does not read names (issue #185), by the words said: the windows the
@@ -615,7 +632,20 @@ def _default_store():
 
 
 def _read(reading, text, context, store, mdl):
-    lower = agent.correct_typos(text.lower())
+    lower = agent.correct_typos(text.lower())   # the words said short read as the words they shorten ("last wk", "in Sept", "PTD")
+    try:
+        # a year beside a month's name is that month ("September 2026"), or refused naming the pair when it is another year's (the
+        # coordinator's review of PR #186, round 2, item 1: never "'2026' is not a window", never another year's month)
+        dated = agent.month_years(lower, context.production_day, (getattr(store, 'production_days', None) or [None])[0])
+    except ValueError as exc:
+        reading.cues.add('unread window')
+        raise Refused(str(exc)) from None
+    if dated != lower:
+        lower = text = dated   # the helpers below read the question again: they read it without the year
+    numbered = agent.numbered_period(lower, context.production_day)
+    if numbered is not None:
+        reading.cues.add('unread window')   # "top operator reasons P1": never the selected period (item 3; parse_request refuses first)
+        raise Refused(str(numbered))
     read_words = getattr(context, 'read', None) or {}
     if read_words.get('words'):
         lower = lower.replace(read_words['words'], agent.READ_AS[read_words['period']])
@@ -690,6 +720,16 @@ def _read(reading, text, context, store, mdl):
         reading.cues.add('year to date')   # no hand route reads it: route never lets one answer for it (the reviewer's check of b76f8e4)
     if ytd and read_words.get('words'):
         raise Refused(f"'{read_words['words']}' and '{ytd[0].group(0).strip()}' are two windows: ask one window at a time")
+    future = re.search(future_pattern(mdl), lower)
+    if future:
+        # "downtime next week", "msf next month": a window after the selected day (the model's `windows.future`), refused over any hand
+        # route, never answered as this week or month (the coordinator's review of PR #186, round 2, item 5)
+        reading.cues |= {'unread window', 'future window'}
+        words = future['words']
+        grain = 'week' if 'week' in words else 'month' if 'month' in words else 'period'
+        offer = re.sub(r"\s+", ' ', agent.correct_typos(text.lower()).replace(future[0].strip(), f' this {grain} ', 1)).strip(' ?.!,')
+        raise Refused(f"'{words}' is after the selected day: a question is answered up to the selected day, and {WINDOWS_READ}",
+                      _checked_offers(reading, [offer], context, store, mdl))
     bare = re.search(BARE_PREVIOUS, lower)
     if bare:
         _bare_previous(reading, bare, text, context, store, mdl)   # "versus previous": the word named, never the window beside it
@@ -715,6 +755,18 @@ def _read(reading, text, context, store, mdl):
         if wrong and wrong[0] != weekday:
             reading.cues.add('wrong window')
             words = re.sub(r'^the\s+', '', wrong[0].strip())
+        rolling = None if rate or span else re.search(ROLLING_LAST, scan)
+        if rolling:
+            # "downtime the last week", "top maintenance reasons the last month": the trailing week or month, a rolling window, never
+            # one compared with nothing (the coordinator's review of PR #186, round 2, item 4): the router's own words, and the window
+            # before the selected one offered ("last week", Mon-Fri)
+            reading.cues.add('unread window')
+            said = rolling[0].strip()
+            before = re.sub(r"\s+", ' ', re.sub(r"\b(?:(?:in|for|during|over|across)\s+)?" + re.escape(said) + r"\b",
+                                                ' ' + said[4:] + ' ', agent.correct_typos(text.lower()), count=1)).strip(' ?.!,')
+            raise Refused(f"A rolling window ('{said}') is not one the records keep: {WINDOWS_READ}. Ask '{before}' for the "
+                          f"{'Mon-Fri week' if rolling[1] == 'week' else 'calendar month' if rolling[1] == 'month' else '4-4-5 period'} "
+                          f"before the selected one")
         if not rate and re.fullmatch(RELATIVE_READ, words):
             # "last week" is a window the model reads: a comparison or a second window kept the scope from moving to it (item 2)
             _relative_unmoved(reading, words, text, context, store, mdl)
@@ -2401,6 +2453,9 @@ def covers(request, reading, context=None, store=None):
         hand = _hand_window(request, context)
         if hand is not None and hand != (q.window['period'], q.window['anchor']) and intent not in ('period_quantity', 'period_stops', 'period_trend'):
             return False
+        if intent == 'period_waste' and hand is not None and hand[0] == 'month' and hand[1] != context.production_day:
+            return False   # a month named ("trim in August"): the semantic model's answer, as before the waste breakdown read the month
+                           # (PR #186, round 2); the breakdown answers a month named only when the reading is not complete
         if q.window['period'] == semantic.YTD and (hand is None or hand[0] != semantic.YTD):
             return False   # no hand route reads the year to date (issue #185): never the selected day's answer for it
         if intent in ('period_quantity', 'period_stops') and hand is not None and hand[0] == q.window['period'] == 'month' \
@@ -2564,8 +2619,10 @@ def route(text, context, store, request, refused):
         return None
     store = store if store is not None else _default_store()
     reading = read(text, context, store)
-    if 'top refused' in reading.cues and reading.refusal:
-        # "top 0", "top 500": refused naming N over whatever the hand route answered or refused (the review of PR #186, items 4 and 5)
+    if reading.cues & {'top refused', 'future window'} and reading.refusal:
+        # "top 0", "top 500": refused naming N over whatever the hand route answered or refused (the review of PR #186, items 4 and 5);
+        # "next week", "next month": a window after the selected day, over any hand route or its refusal ("how many stops next week"
+        # was "asks for one stop"; round 2, item 5)
         raise ValueError(refusal_text(reading))
     if 'uncounted' in reading.cues:
         # "which shift had the most chops", "compare shifts on chops", "stacker boards on shift 1 versus shift 2": a count of what the

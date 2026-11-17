@@ -488,3 +488,102 @@ def test_the_semantic_model_page_lists_the_default_ranking_and_the_year_to_date(
     page = S.model_markdown()
     assert '## Windows' in page and 'Year to date' in page and 'so far this year' in page
     assert 'ranked by downtime minutes' in page.lower() or 'downtime_minutes' in page.split('## Default rankings', 1)[-1]
+
+
+# ---- The coordinator's review of PR #186 at 69d8a15 (round 2)
+
+def test_window_words_said_short_are_model_entries():
+    """Item 5: "wk", "mo", "Sept", "PTD", "Q-3" and "3Q" are the model's `windows.shorthand`, read by every route as the words they
+    shorten; "next week" and "next month" are its `windows.future`, refused. Checked when the model loads."""
+    from investigator import agent
+    model = S.model()
+    assert {'wk': 'week', 'mo': 'month', 'sept': 'september', 'ptd': 'period to date', 'q-3': 'q3', '3q': 'q3'}.items() <= model.shorthand.items()
+    assert {'next week', 'next month'} <= set(model.future)
+    assert agent.read_shorthand('downtime last wk in sept, ptd, q-3 or 3q') == 'downtime last week in september, period to date, q3 or q3'
+    assert agent.read_shorthand('the wks-long run') == 'the wks-long run'   # never inside a hyphenated word
+    spec = json.loads(S.MODEL_PATH.read_text())
+    spec['windows']['shorthand']['words']['WK'] = 'week'
+    with pytest.raises(ValueError, match='said short'):
+        S.Model(spec)
+    spec = json.loads(S.MODEL_PATH.read_text())
+    spec['windows']['future']['words'].append('Next Year')
+    with pytest.raises(ValueError, match='after the selected day'):
+        S.Model(spec)
+    page = S.model_markdown()
+    assert '### Said short' in page and '### After the selected day' in page and '"next week"' in page
+
+
+@pytest.mark.parametrize('lower, read', [
+    ('downtime september 2026', 'downtime september'), ('msf in september, 2026', 'msf in september'),
+    ('downtime during september of 2026', 'downtime during september'), ('how did december 2025 go?', 'how did december go?'),
+    ('compare september 2026 to august 2026', 'compare september to august'),
+    ('downtime on 10 september 2026', 'downtime on 10 september 2026'),      # a named date: not this rule's ("not this round")
+    ('downtime september 10, 2026', 'downtime september 10, 2026'),
+    ('downtime 2025', 'downtime 2025'),                                      # a year alone: refused by the parser, as before
+])
+def test_a_year_beside_a_month_is_that_month(lower, read):
+    """Item 1: the year a month's name reads from the selected day is read away, so every route answers that month as main did."""
+    from investigator import agent
+    assert agent.month_years(lower, DAY, '2025-01-01') == read
+
+
+@pytest.mark.parametrize('lower, said', [
+    ('downtime august 2025', "^'august 2025' is not the August a month's name reads: that is the latest August on or before the selected day, August 2026"),
+    ('downtime october 2026', "^'october 2026' is after the selected day"),
+    ('downtime in december 2024', "^'december 2024' is before the records, which hold production days from 2025-01-01"),
+])
+def test_a_month_of_another_year_is_refused_naming_the_pair(lower, said):
+    """Item 1: never another year's month (main answered August 2026 for "downtime August 2025")."""
+    from investigator import agent
+    with pytest.raises(agent.Standing, match=said):
+        agent.month_years(lower, DAY, '2025-01-01')
+
+
+@pytest.mark.parametrize('question', ['top operator reasons P1', 'top operator reasons in P9', 'downtime P1', 'how many stops in P12',
+                                      'downtime P13'])
+@pytest.mark.parametrize('scope', ['shift', 'day'])
+def test_a_numbered_period_is_the_selected_one_or_refused_naming_it(store, question, scope):
+    """Item 3: a 4-4-5 period said by its number answers only when it holds the selected day (P2 on 14 Sep 2026), on every route; the
+    hand route ("downtime P1") answered P2 on main too."""
+    context = Context(DAY, 2, scope=scope, period='day')
+    with pytest.raises(ValueError, match=r"^'p1[0-3]?' is not|^'p[0-9]+' is not"):
+        route(question, context, store.production_days, store)
+    for kept in ('top operator reasons P2', 'how many stops in P2'):
+        request, _ = route(kept, context, store.production_days, store)
+        assert request['plan'][0]['arguments']['window']['period'] == 'fiscal'
+
+
+@pytest.mark.parametrize('question, grain', [('downtime the last week', 'week'), ('msf in the last week', 'week'),
+                                             ('top operator reasons over the last week', 'week'),
+                                             ('top maintenance reasons the last month', 'month'), ('downtime the last period', 'period')])
+def test_the_last_week_is_a_rolling_window_never_compared_with_nothing(store, question, grain):
+    """Item 4: "the last week" is the trailing week, refused in the router's own words with the window before offered."""
+    context = Context(DAY, 2, scope='shift', period='day')
+    with pytest.raises(ValueError) as refused:
+        route(question, context, store.production_days, store)
+    text = str(refused.value)
+    assert text.startswith(f"A rolling window ('the last {grain}') is not one the records keep") and 'compared with no window' not in text
+    assert f"last {grain}'" in text
+
+
+@pytest.mark.parametrize('question', ['top 200 orders by rejects YTD', 'top 200 days by msf YTD', 'top 200 customers by rejects YTD',
+                                      'top 40 customers by rejects YTD'])
+def test_a_long_ranking_is_bounded_for_the_planner_never_on_the_card(store, question):
+    """Item 2: every top N up to MAX_LIMIT answers in full. Each row carries its record ids, so 40 customers or 75 days took the planner
+    context past its bound and stopped at context_limit; the planner's view leaves them out, then the rows past PLANNER_ROWS."""
+    from investigator import agent
+    request, context = route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+    analysis = store.day_analysis(context.production_day)
+    try:
+        result = Agent(analysis).ask(question, context, request=request)
+    finally:
+        analysis.close()
+    assert result['status'] == 'complete'
+    data = result['trace'][0]['data']
+    assert len(data['rows']) == min(request['plan'][0]['arguments']['limit'], data['groups'])
+    assert [len(t['rows']) for t in result['tables']] == [len(data['rows'])] and [len(c['rows']) for c in result['charts']] == [len(data['rows'])]
+    step = {'result_id': 'r:1', 'tool': 'semantic_query', 'ok': True, 'data': data}
+    assert 'source_ids' in data['rows'][0] and 'source_ids' not in agent.planner_view(step, 'ids')['data']['rows'][0]
+    cut = agent.planner_view(step, 'rows')['data']
+    assert len(cut['rows']) == min(agent.PLANNER_ROWS, len(data['rows'])) and cut.get('rows_left_out', 0) == max(0, len(data['rows']) - agent.PLANNER_ROWS)
+    assert agent.planner_view(step) == step   # under the bound the planner sees the result whole, as before
