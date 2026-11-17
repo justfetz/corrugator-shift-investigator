@@ -350,7 +350,8 @@ def test_every_case_study_figure_comes_from_a_generated_file(site):
     assert (f'The other {unscored} runs' in text) == bool(unscored), 'skipped runs are said, never counted as failures'
     assert last['dataset'] in text
     offline = [r for r in rows if not r['provider']]
-    assert 'Offline' in text and f'{sum(r["outcome"] == "pass" for r in offline)}/{len(offline)}' in text
+    ran = [r for r in offline if r['outcome'] in ('pass', 'fail')]   # a known defect (xfail) is out of the denominator, as a skip is
+    assert 'Offline' in text and f'{sum(r["outcome"] == "pass" for r in offline)}/{len(ran)}' in text
     assert f'{sum(r["type"] == "value" for r in rows)} cases hold a tool\'s numbers' in text
     live = newest['live']['anthropic']
     cases = len(recorded_live_cases(ROOT, last))
@@ -435,6 +436,9 @@ def test_the_score_table_leaves_skips_and_known_defects_unscored(tmp_path):
     root = figure_root(tmp_path)
     path = root / 'evals' / 'last_run.json'
     last = json.loads(path.read_text(encoding='utf-8'))
+    # the tracked run's own known defects (issue #187's two for #172) are set to pass first, so the three marked here are the
+    # only offline runs out of the score, whatever the tracked run holds
+    last['rows'] = [{**r, 'outcome': 'pass' if r['outcome'] == 'xfail' else r['outcome']} for r in last['rows']]
     offline = [r for r in last['rows'] if not r['provider']]
     marked = {offline[0]['id']: 'xfail', offline[1]['id']: 'skip', offline[2]['id']: 'fail'}
     last['rows'] = [{**r, 'outcome': marked.get(r['id'], r['outcome'])} for r in last['rows']]
