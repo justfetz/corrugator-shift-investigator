@@ -306,7 +306,8 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                # ... and 200 of them, on each scope, and the customers' rejects of the year to date, 40 and all 41: 163-320 ms alone
                # (PR #186, round 2, item 2)
                'top-n-top-200-orders-answers-in-full', 'top-n-top-200-orders-answers-in-full-all',
-               'top-n-top-200-customers-answers-in-full', 'top-n-top-40-customers-answers-in-full'}
+               'top-n-top-200-customers-answers-in-full', 'top-n-top-40-customers-answers-in-full',
+               'top-n-top-two-hundred-orders-answers-in-full'}
 # A ranking of 200 rows that runs well inside the default states it (PR #186, round 2, item 2: every top N up to MAX_LIMIT answers in
 # full, each N = 200 case with a budget): the 183 production days of the year to date by MSF, 44-56 ms
 STATED_DEFAULT_CASES = {'top-n-top-200-days-answers-in-full'}
@@ -497,8 +498,9 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # named-shift-list cases + 19 issue #185 top-N and year-to-date cases + 5 from the reviewer's check of its first fix + 1 of its second
     # + PR #186's first coordinator review, 14 (three of them the owner's review kept on 'What were the downtime reasons yesterday?'),
     # and the reviewer's check of that fix round, 4 + its second coordinator review, 33 (a month with its year, a top N up to 200 in full,
-    # the selected period by its number, the words said short, the waste breakdown of a month named and two guards beside it)
-    assert len(routing) == 615 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # the selected period by its number, the words said short, the waste breakdown of a month named and two guards beside it) + the
+    # reviewer's check of that round, 14
+    assert len(routing) == 629 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

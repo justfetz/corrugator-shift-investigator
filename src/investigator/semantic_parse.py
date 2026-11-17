@@ -449,6 +449,8 @@ def future_pattern(mdl=None):
     if id(mdl) not in _FUTURE:
         words = sorted(mdl.future, key=len, reverse=True) or ['(?!)']
         alternatives = [r'\s+'.join(re.escape(t) for t in w.split()) if w != '(?!)' else w for w in words]
+        # ... and "next" said with a count ("next 2 weeks", "the next three months"): the same windows after the selected day
+        alternatives.append(rf"next\s+{_COUNT}\s+(?:production\s+)?(?:days|weeks|months|periods)")
         _FUTURE[id(mdl)] = r"\b(?:(?:for|over|in|during|across|through)\s+)?(?:the\s+)?(?P<words>" + '|'.join(alternatives) + r")\b"
     return _FUTURE[id(mdl)]
 
@@ -726,7 +728,7 @@ def _read(reading, text, context, store, mdl):
         # route, never answered as this week or month (the coordinator's review of PR #186, round 2, item 5)
         reading.cues |= {'unread window', 'future window'}
         words = future['words']
-        grain = 'week' if 'week' in words else 'month' if 'month' in words else 'period'
+        grain = 'week' if re.search(r'week|days', words) else 'month' if 'month' in words else 'period'
         offer = re.sub(r"\s+", ' ', agent.correct_typos(text.lower()).replace(future[0].strip(), f' this {grain} ', 1)).strip(' ?.!,')
         raise Refused(f"'{words}' is after the selected day: a question is answered up to the selected day, and {WINDOWS_READ}",
                       _checked_offers(reading, [offer], context, store, mdl))
@@ -737,6 +739,19 @@ def _read(reading, text, context, store, mdl):
     moved_span = next((m for m in re.finditer(UNREAD_SPAN, agent.correct_typos(text.lower()))
                        if read_words.get('words') and read_words['words'] in m[0]), None)
     month_to = None if re.search(COMPARE_SAID, lower) else re.search(MONTH_TO, lower)
+    rolling = None if moved_span or re.search(UNREAD_SPAN, lower) else re.search(ROLLING_LAST, lower)
+    if rolling:
+        # "downtime the last week", "top maintenance reasons the last month", "the last fiscal period": the trailing week, month or
+        # period, a rolling window, never one compared with nothing nor the selected period (the coordinator's review of PR #186, round
+        # 2, item 4, and the reviewer's check of it): the router's own words, and the window before the selected one offered
+        reading.cues |= {'unread window', 'rolling window'}
+        said = rolling[0].strip()
+        before = re.sub(r"\s+", ' ', re.sub(r"\b(?:(?:in|for|during|over|across)\s+)?" + re.escape(said) + r"\b",
+                                            ' last ' + ('period' if 'period' in rolling[1] else rolling[1]) + ' ',
+                                            agent.correct_typos(text.lower()), count=1)).strip(' ?.!,')
+        raise Refused(f"A rolling window ('{said}') is not one the records keep: {WINDOWS_READ}. Ask '{before}' for the "
+                      f"{'Mon-Fri week' if rolling[1] == 'week' else 'calendar month' if rolling[1] == 'month' else '4-4-5 period'} "
+                      f"before the selected one")
     unread = moved_span or re.search(UNREAD_SPAN, lower) or month_to or re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
         # "a year", "per year" or "annually" said as a rate of money or a loss ("what is trim costing us per year", "dollars a year from
@@ -755,18 +770,6 @@ def _read(reading, text, context, store, mdl):
         if wrong and wrong[0] != weekday:
             reading.cues.add('wrong window')
             words = re.sub(r'^the\s+', '', wrong[0].strip())
-        rolling = None if rate or span else re.search(ROLLING_LAST, scan)
-        if rolling:
-            # "downtime the last week", "top maintenance reasons the last month": the trailing week or month, a rolling window, never
-            # one compared with nothing (the coordinator's review of PR #186, round 2, item 4): the router's own words, and the window
-            # before the selected one offered ("last week", Mon-Fri)
-            reading.cues.add('unread window')
-            said = rolling[0].strip()
-            before = re.sub(r"\s+", ' ', re.sub(r"\b(?:(?:in|for|during|over|across)\s+)?" + re.escape(said) + r"\b",
-                                                ' ' + said[4:] + ' ', agent.correct_typos(text.lower()), count=1)).strip(' ?.!,')
-            raise Refused(f"A rolling window ('{said}') is not one the records keep: {WINDOWS_READ}. Ask '{before}' for the "
-                          f"{'Mon-Fri week' if rolling[1] == 'week' else 'calendar month' if rolling[1] == 'month' else '4-4-5 period'} "
-                          f"before the selected one")
         if not rate and re.fullmatch(RELATIVE_READ, words):
             # "last week" is a window the model reads: a comparison or a second window kept the scope from moving to it (item 2)
             _relative_unmoved(reading, words, text, context, store, mdl)
@@ -2619,10 +2622,13 @@ def route(text, context, store, request, refused):
         return None
     store = store if store is not None else _default_store()
     reading = read(text, context, store)
-    if reading.cues & {'top refused', 'future window'} and reading.refusal:
+    if reading.cues & {'top refused', 'future window'} and reading.refusal or 'rolling window' in reading.cues and reading.refusal \
+            and (refused is None and request is not None or refused is not None and not str(refused).startswith('A rolling window')):
         # "top 0", "top 500": refused naming N over whatever the hand route answered or refused (the review of PR #186, items 4 and 5);
         # "next week", "next month": a window after the selected day, over any hand route or its refusal ("how many stops next week"
-        # was "asks for one stop"; round 2, item 5)
+        # was "asks for one stop"; round 2, item 5); "the last fiscal period", over any route that answered (the quantity routes read
+        # their own window words), and over any refusal but the router's own rolling one ("how many stops the last fiscal period" was
+        # "'last' asks for one stop")
         raise ValueError(refusal_text(reading))
     if 'uncounted' in reading.cues:
         # "which shift had the most chops", "compare shifts on chops", "stacker boards on shift 1 versus shift 2": a count of what the

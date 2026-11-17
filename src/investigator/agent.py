@@ -886,8 +886,13 @@ def read_shorthand(lower):
 # the year that is that month's is read away and every route answers the month as before; another year is refused naming the pair,
 # never answered as the month the name reads. A day said with the month ("10 September 2026", "September 10, 2026") is a named date,
 # left as it is; a year said alone stays refused (semantic_parse.UNREAD_WINDOW).
-MONTH_YEAR = (r"\b(?:(?P<before>\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?)?(?P<month>" + MONTH_WORDS[1:-1] + r")\b"
+MONTH_YEAR = (r"\b(?:(?P<before>\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?)?(?P<month>" + MONTH_WORDS[1:-1] + r")\b\.?"
               r"(?:\s+(?P<after>\d{1,2})(?:st|nd|rd|th)?\b)?\s*,?\s+(?:of\s+)?(?P<year>(?:19|20)\d\d)\b")
+# ... and the year said first ("2026 September"), never before a day ("2026 September 10" is a named date)
+YEAR_MONTH = r"\b(?P<year>(?:19|20)\d\d)\s*,?\s+(?P<month>" + MONTH_WORDS[1:-1] + r")\b(?!\s+\d)"
+# A number before a month's name that is a shift's, a ranking's or a period's, never a day ("downtime shift 2 September 2026", "top 10
+# August 2026 downtime reasons": the reviewer's check of round 2)
+NOT_A_DAY = r"\b(?:shifts?|top|bottom|crews?|p|first|last|next|best|worst)\s*$"
 
 
 def month_years(lower, anchor, first_day=None):
@@ -895,13 +900,16 @@ def month_years(lower, anchor, first_day=None):
     Standing naming the pair when it is another year (before the records when `first_day`, the store's first production day, is
     after the month). A named date (a day beside the month) is left unchanged."""
     def one(m):
-        if m['before'] or m['after']:
-            return m[0]
+        groups, text = m.groupdict(), m.string
+        if groups.get('after') or groups.get('before') and not re.search(NOT_A_DAY, text[:m.start()]):
+            return m[0]   # a named date ("10 September 2026", "September 10, 2026")
+        keep = text[m.start():m.start('month')] if groups.get('before') else ''   # "shift 2 " before the month is the shift's
+        said = re.sub(r"\s+", ' ', text[m.start() + len(keep):m.end()]).strip(' ,')
         month, year = MONTH_NAMES[m['month']], int(m['year'])
         reads = int(anchor[:4]) - (1 if month > int(anchor[5:7]) else 0)
         if year == reads:
-            return m['month']
-        said, name = re.sub(r"\s+", ' ', m[0]).strip(), m['month'].capitalize()
+            return keep + m['month']
+        name = m['month'].capitalize()
         if year < reads and first_day and f'{year:04d}-{month:02d}-31' < first_day:
             raise Standing(f"'{said}' is before the records, which hold production days from {first_day}: a month's name reads the latest "
                            f"{name} on or before the selected day, {name} {reads}.")
@@ -910,38 +918,52 @@ def month_years(lower, anchor, first_day=None):
                            f"and a question is answered up to the selected day.")
         raise Standing(f"'{said}' is not the {name} a month's name reads: that is the latest {name} on or before the selected day, "
                        f"{name} {reads}. To ask about {name} {year}, set the day control to a day in it and ask about '{m['month']}'.")
-    return re.sub(MONTH_YEAR, one, lower)
+    return re.sub(YEAR_MONTH, one, re.sub(MONTH_YEAR, one, lower))
 
 
 # A 4-4-5 period named by its number ("P1", "in P9"): read only as the period that holds the selected day; another number is refused
 # naming it, never answered as the selected one (the coordinator's review of PR #186, round 2, item 3: "top operator reasons P1" and
 # "downtime P1" answered P2)
 PERIOD_NUMBER = r"\bp(1[0-3]|[1-9])\b"
+# ... said in words ("fiscal period 9", "accounting period 1", "period 9"): read as "p9" by every route (the reviewer's check of round
+# 2: the number was dropped and P2 or the selected day answered), never a count of periods or a span ("period 2 weeks", "periods 1-3")
+PERIOD_SAID = (r"\b(?:(?:fiscal|accounting|4-4-5|445)\s+)?period\s+(1[0-3]|[1-9])\b(?!\s*(?:[-–]|to\b|through\b|thru\b)\s*\d)"
+               r"(?![\s-]*(?:weeks?|days?|months?|years?|shifts?|hours?|minutes?)\b)")
 
 
-def numbered_period(lower, anchor):
-    """Standing naming a 4-4-5 period said by its number that is not the one holding `anchor` (the selected day), else None."""
+def read_period_numbers(lower):
+    """`lower` with a 4-4-5 period said by its number in words ("fiscal period 9") as its P-number ("p9")."""
+    return re.sub(PERIOD_SAID, r"p\1", lower)
+
+
+def numbered_period(lower, anchor, answers=None):
+    """Standing naming a 4-4-5 period said by its number that is not the one holding `anchor` (the selected day), the first of them
+    when several are said ("P2 vs P9"), else None. `answers(question)` is True when the router answers a question: the questions the
+    refusal offers ("... last period") are only those it answers; with no `answers`, none is offered."""
     from datetime import date
     from .record_store import fiscal_period, previous_window
-    said = next((m for m in re.finditer(PERIOD_NUMBER, lower) if not re.match(r"\s*[-–]\s*\d", lower[m.end():])), None)
+    start, end, _, number, _ = fiscal_period(date.fromisoformat(anchor))
+    lower = read_period_numbers(lower)
+    said = next((m for m in re.finditer(PERIOD_NUMBER, lower)
+                 if int(m[1]) != number and not re.match(r"\s*[-–]\s*\d", lower[m.end():])), None)
     if said is None:
         return None
-    start, end, _, number, _ = fiscal_period(date.fromisoformat(anchor))
     asked = int(said[1])
-    if asked == number:
-        return None
     held = f"P{number}, {start.day} {start.strftime('%b')}–{end.day} {end.strftime('%b')} {end.year}"
 
-    def swap(words):   # the question with the period said in words the router reads
+    def swap(words):   # the question with the period said in words the router reads, offered only when the router answers it
         pattern = r"\b(?:(?:in|for|during|over|across)\s+)?(?:the\s+)?(?:4-4-5\s+|accounting\s+|fiscal\s+)?" + re.escape(said[0]) + r"\b"
-        return re.sub(r"\s+", ' ', re.sub(pattern, f' {words} ', lower, count=1)).strip(' ?.!,')
+        offer = re.sub(r"\s+", ' ', re.sub(pattern, f' {words} ', lower, count=1)).strip(' ?.!,')
+        return offer if answers is not None and len(re.findall(PERIOD_NUMBER, lower)) == 1 and answers(offer) else None   # one period said
     if asked > 12:
-        return Standing(f"'{said[0]}' is not a 4-4-5 period: a fiscal year holds P1 to P12, and the selected day is in {held}. "
-                        f"Ask '{swap('this period')}' or '{swap('last period')}'.")
+        offers = [f"'{o}'" for o in (swap('this period'), swap('last period')) if o]
+        return Standing(f"'{said[0]}' is not a 4-4-5 period: a fiscal year holds P1 to P12, and the selected day is in {held}."
+                        + (f" Ask {' or '.join(offers)}." if offers else ''))
     before = fiscal_period(previous_window('fiscal', start, end)[0])[3]
-    ask = f"Ask '{swap('last period')}'" if asked == before else f"Ask '{swap('this period')}' for {held.split(',')[0]}"
+    offer = swap('last period') if asked == before else swap('this period')
+    ask = (f"Ask '{offer}'" + ('' if asked == before else f" for P{number}") + ", or set") if offer else 'Set'
     return Standing(f"'{said[0]}' is not the 4-4-5 period that holds the selected day, {held}: a period said by its number is read only "
-                    f"as that one. {ask}, or set the day control to a day in P{asked}.")
+                    f"as that one. {ask} the day control to a day in P{asked}.")
 
 
 # The measure's own words, by metric: its noun and unit, the "per <denominator>" of a kept ratio and the average a kept ratio is
@@ -1972,11 +1994,12 @@ def nearest_measure(word):
 
 
 def correct_typos(lower):
-    """`lower` with each misspelt measure word replaced by the measure (MEASURE_VOCABULARY) and each window word said short read as
-    the words it shortens (read_shorthand); other words unchanged."""
+    """`lower` with each misspelt measure word replaced by the measure (MEASURE_VOCABULARY), each window word said short read as
+    the words it shortens (read_shorthand) and a 4-4-5 period said by its number in words as its P-number (read_period_numbers);
+    other words unchanged."""
     from .real_words import REAL_WORDS
-    return read_shorthand(re.sub(r"[a-z]+", lambda match: match.group(0) if match.group(0) in REAL_WORDS else
-                                 (nearest_measure(match.group(0)) or match.group(0)), lower))   # "last wk": last week (PR #186, round 2)
+    return read_period_numbers(read_shorthand(re.sub(r"[a-z]+", lambda match: match.group(0) if match.group(0) in REAL_WORDS else
+                                 (nearest_measure(match.group(0)) or match.group(0)), lower)))   # "last wk", "period 9" (PR #186, round 2)
 
 
 # ---- The question's own scope (issue #105): "How much downtime on 1st shift last week?" asked with shift 2 and
@@ -2211,8 +2234,16 @@ def parse_request(text, current, store=None):
         catch_all_guard(correct_typos(text.lower()), request)
     except ValueError as exc:
         refused = exc
+    days = getattr(store, 'production_days', None) if store else None
+
+    def answers(question):   # the router answers a question a refusal offers, in the same controls
+        try:
+            route(question, current, days, store)
+            return True
+        except ValueError:
+            return False
     numbered = None if isinstance(refused, Standing) or not isinstance(text, str) else \
-        numbered_period(read_shorthand(text.lower()), current.production_day)
+        numbered_period(read_shorthand(text.lower()), current.production_day, answers if days else None)
     if numbered is not None:
         # "downtime P1", "top operator reasons P9": a 4-4-5 period said by its number that is not the selected one, on every route
         # (the coordinator's review of PR #186, round 2, item 3: the hand route and the parser both answered P2); a Standing refusal

@@ -520,6 +520,10 @@ def test_window_words_said_short_are_model_entries():
     ('downtime on 10 september 2026', 'downtime on 10 september 2026'),      # a named date: not this rule's ("not this round")
     ('downtime september 10, 2026', 'downtime september 10, 2026'),
     ('downtime 2025', 'downtime 2025'),                                      # a year alone: refused by the parser, as before
+    ('downtime shift 2 september 2026', 'downtime shift 2 september'),       # a shift's number is no day (the reviewer's check)
+    ('top 10 august 2026 downtime reasons', 'top 10 august downtime reasons'),
+    ('downtime 2026 september', 'downtime september'), ('downtime in august. 2026', 'downtime in august'),
+    ('downtime 2026 september 10', 'downtime 2026 september 10'),
 ])
 def test_a_year_beside_a_month_is_that_month(lower, read):
     """Item 1: the year a month's name reads from the selected day is read away, so every route answers that month as main did."""
@@ -531,6 +535,8 @@ def test_a_year_beside_a_month_is_that_month(lower, read):
     ('downtime august 2025', "^'august 2025' is not the August a month's name reads: that is the latest August on or before the selected day, August 2026"),
     ('downtime october 2026', "^'october 2026' is after the selected day"),
     ('downtime in december 2024', "^'december 2024' is before the records, which hold production days from 2025-01-01"),
+    ('downtime 2025 august', "^'2025 august' is not the August a month's name reads"),
+    ('downtime shift 1 august 2025', "^'august 2025' is not the August"),
 ])
 def test_a_month_of_another_year_is_refused_naming_the_pair(lower, said):
     """Item 1: never another year's month (main answered August 2026 for "downtime August 2025")."""
@@ -540,7 +546,8 @@ def test_a_month_of_another_year_is_refused_naming_the_pair(lower, said):
 
 
 @pytest.mark.parametrize('question', ['top operator reasons P1', 'top operator reasons in P9', 'downtime P1', 'how many stops in P12',
-                                      'downtime P13'])
+                                      'downtime P13', 'downtime P2 vs P9', 'downtime fiscal period 9', 'downtime accounting period 1',
+                                      'downtime in period 9'])
 @pytest.mark.parametrize('scope', ['shift', 'day'])
 def test_a_numbered_period_is_the_selected_one_or_refused_naming_it(store, question, scope):
     """Item 3: a 4-4-5 period said by its number answers only when it holds the selected day (P2 on 14 Sep 2026), on every route; the
@@ -548,14 +555,16 @@ def test_a_numbered_period_is_the_selected_one_or_refused_naming_it(store, quest
     context = Context(DAY, 2, scope=scope, period='day')
     with pytest.raises(ValueError, match=r"^'p1[0-3]?' is not|^'p[0-9]+' is not"):
         route(question, context, store.production_days, store)
-    for kept in ('top operator reasons P2', 'how many stops in P2'):
+    for kept in ('top operator reasons P2', 'how many stops in P2', 'downtime period 2'):
         request, _ = route(kept, context, store.production_days, store)
         assert request['plan'][0]['arguments']['window']['period'] == 'fiscal'
 
 
 @pytest.mark.parametrize('question, grain', [('downtime the last week', 'week'), ('msf in the last week', 'week'),
                                              ('top operator reasons over the last week', 'week'),
-                                             ('top maintenance reasons the last month', 'month'), ('downtime the last period', 'period')])
+                                             ('top maintenance reasons the last month', 'month'), ('downtime the last period', 'period'),
+                                             ('downtime the last fiscal period', 'fiscal period'),
+                                             ('how many stops the last fiscal period', 'fiscal period')])
 def test_the_last_week_is_a_rolling_window_never_compared_with_nothing(store, question, grain):
     """Item 4: "the last week" is the trailing week, refused in the router's own words with the window before offered."""
     context = Context(DAY, 2, scope='shift', period='day')
@@ -563,7 +572,7 @@ def test_the_last_week_is_a_rolling_window_never_compared_with_nothing(store, qu
         route(question, context, store.production_days, store)
     text = str(refused.value)
     assert text.startswith(f"A rolling window ('the last {grain}') is not one the records keep") and 'compared with no window' not in text
-    assert f"last {grain}'" in text
+    assert f"last {grain.split()[-1]}'" in text
 
 
 @pytest.mark.parametrize('question', ['top 200 orders by rejects YTD', 'top 200 days by msf YTD', 'top 200 customers by rejects YTD',
@@ -587,3 +596,21 @@ def test_a_long_ranking_is_bounded_for_the_planner_never_on_the_card(store, ques
     cut = agent.planner_view(step, 'rows')['data']
     assert len(cut['rows']) == min(agent.PLANNER_ROWS, len(data['rows'])) and cut.get('rows_left_out', 0) == max(0, len(data['rows']) - agent.PLANNER_ROWS)
     assert agent.planner_view(step) == step   # under the bound the planner sees the result whole, as before
+
+
+def test_a_numbered_period_offers_only_a_question_the_router_answers(store):
+    """The reviewer's check of round 2: "downtime in P9 2026" offered 'downtime this period 2026', itself refused; "P1 vs P2" two windows."""
+    context = Context(DAY, 2, scope='shift', period='day')
+    for question in ('downtime in P9 2026', 'downtime P1 vs P2', 'downtime P1-P3', 'downtime P2 vs P9'):
+        with pytest.raises(ValueError, match=r"Set the day control to a day in P\d\.$"):
+            route(question, context, store.production_days, store)
+    with pytest.raises(ValueError, match=r"Ask 'downtime last period', or set the day control to a day in P1\.$"):
+        route('downtime P1', context, store.production_days, store)
+
+
+@pytest.mark.parametrize('question', ['downtime next week', 'downtime next 2 weeks', 'downtime the coming week', 'downtime upcoming month',
+                                      'downtime the week after next', 'how many stops next week'])
+def test_a_window_after_the_selected_day_is_refused_on_every_route(store, question):
+    """Item 5 and the reviewer's check of it: the model's windows.future, and "next" with a count."""
+    with pytest.raises(ValueError, match=r"is after the selected day: a question is answered up to the selected day"):
+        route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)

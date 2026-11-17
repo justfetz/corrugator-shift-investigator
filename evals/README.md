@@ -214,7 +214,7 @@ run alone, so it carries the same 500, as does the same question on 2025-08-21
 order, 241–312 ms in-process run alone, and so do the rankings of 200 orders on each scope (278–341 ms in-process, 234–294 ms
 over GET), of the customers' rejects (`top-n-top-200-customers-answers-in-full`, 41 rows, 264–293 / 210–246 ms) and of 40 customers
 (`top-n-top-40-customers-answers-in-full`, 255–272 / 222–227 ms), each run alone three times (PR #186, round 2: every top N up
-to the model's 200 answers in full). The ranking of the year's 183 production days (`top-n-top-200-days-answers-in-full`, 136–148 /
+to the model's 200 answers in full; `top-n-top-two-hundred-orders-answers-in-full` asks the same N in words). The ranking of the year's 183 production days (`top-n-top-200-days-answers-in-full`, 136–148 /
 95–130 ms alone, 44–56 ms warm) states the default, 250 ms (`STATED_DEFAULT_CASES` in `tests/test_evals.py`).
 Under about 2x CPU contention (four busy loops on the
 four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`

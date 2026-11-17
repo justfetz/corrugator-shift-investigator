@@ -24816,9 +24816,9 @@
    "reviewed_by": "owner-pending",
    "question": "top operator reasons since 1 Jan",
    "expect": {
-    "raises": "^'since 1 jan' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+    "raises": "^'since 1 january' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
    },
-   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span from a date: c7b61dd answered the selected day, 2.15%."
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span from a date: c7b61dd answered the selected day, 2.15%. Round 2 (the reviewer's check of item 5): 'Jan' is January said short (the model's windows.shorthand), so the refusal names 'since 1 january'."
   },
   {
    "id": "top-n-since-a-month-refused",
@@ -26993,6 +26993,556 @@
     ]
    },
    "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: a guard, as the case before: the two families compared over August, as at 69d8a15 and on main."
+  },
+  {
+   "id": "top-n-a-shift-before-a-month-with-its-year",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime shift 2 september 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=2026-09",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.40%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the reviewer subagent's check of this round: a shift's number before the month is no day of it. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; main answered shift 2's September 2026 review, 3.40%, as now."
+  },
+  {
+   "id": "top-n-a-shift-before-a-month-with-its-year-all",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "downtime on shift 1 August 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08&shifts=1",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "shift": 1
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2\\.65%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the reviewer subagent's check of this round: the page on All. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; main answered shift 1's August 2026 review, 2.65%, as now."
+  },
+  {
+   "id": "top-n-top-n-before-a-month-with-its-year",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 10 August 2026 downtime reasons",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=2026-08&by=reason&rank=most&top=10",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "group_by": [
+        "reason"
+       ],
+       "filters": {},
+       "shift": null,
+       "compare": null,
+       "limit": 10
+      }
+     }
+    ],
+    "sections_match": [
+     "^Order change had the most downtime, leaving out Planned maintenance and Power outage: \\*\\*152\\.15 min\\*\\*"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the reviewer subagent's check of this round: a ranking's N before the month is no day of it. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; main answered August's review; now the reasons of August 2026 ranked, top 10."
+  },
+  {
+   "id": "top-n-a-year-before-its-month",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime 2026 September",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-09",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.24%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the reviewer subagent's check of this round: the year said first. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; main answered September 2026's review, 3.24%, as now."
+  },
+  {
+   "id": "top-n-a-year-before-another-years-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime 2025 August",
+   "expect": {
+    "raises": "^'2025 august' is not the August a month's name reads: that is the latest August on or before the selected day, August 2026\\. To ask about August 2025, set the day control to a day in it and ask about 'august'\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the reviewer subagent's check of this round: the year said first, another year than the month's name reads: main answered August 2026's review (2.67%); 69d8a15 refused \"'2025' is not a window\"."
+  },
+  {
+   "id": "top-n-a-short-month-with-its-year",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Aug. 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2\\.67%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the reviewer subagent's check of this round: a month said short, with a full stop, and its year: 69d8a15 refused \"'2026' is not a window\"; main answered the selected day's review, 2.88%."
+  },
+  {
+   "id": "top-n-summary-of-a-month-with-its-year",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "summary September 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=kpis&window=2026-09",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2,620\\.5 MSF/day\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the selected shift, beside the All case. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; main answered shift 2's September 2026 KPI tiles, 2,620.5 MSF/day, as now."
+  },
+  {
+   "id": "top-n-waste-breakdown-of-a-month-with-its-year-all",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "waste breakdown September 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=2026-09",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.49%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the page on All, beside the shift case. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; main answered this month's waste breakdown, 3.49% side trim, as now."
+  },
+  {
+   "id": "top-n-trim-in-a-month-with-its-year",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim September 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=trim_sqft&window=2026-09",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "trim_sqft",
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "group_by": [],
+       "filters": {},
+       "shift": null,
+       "compare": null,
+       "limit": 25
+      }
+     }
+    ],
+    "sections_match": [
+     "^Side trim this month: \\*\\*5,677,925\\.3 sq ft\\*\\*"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the selected shift, beside the All case. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; now the side trim of September 2026."
+  },
+  {
+   "id": "top-n-speed-in-a-month-with-its-year-all",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "speed September 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=2026-09",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*629\\.1 ft/min\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 1: the page on All, beside the shift case. 69d8a15 refused \"'2026' is not a window the semantic model reads\"; main answered September 2026's speed by grade, 629.1 ft/min, as now."
+  },
+  {
+   "id": "top-n-top-two-hundred-orders-answers-in-full",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top two hundred orders by rejects YTD",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=ytd&by=order&rank=most&top=200",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "window": {
+        "period": "ytd",
+        "anchor": "2026-09-14"
+       },
+       "group_by": [
+        "order"
+       ],
+       "filters": {},
+       "shift": null,
+       "compare": null,
+       "limit": 200
+      }
+     }
+    ],
+    "sections_match": [
+     "^SO-2606080029 had the most dry-end rejects year to date: \\*\\*9,330\\.5 sq ft\\*\\*",
+     "largest first, top 200\\.$",
+     "\\(query 1 · row 199\\)$"
+    ],
+    "max_ms": 500,
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 2: the reviewer subagent's check of this round: N in number words; 69d8a15 stopped at context_limit. The year to date's rejects ranked by order, as 'top 200', so it carries max_ms 500."
+  },
+  {
+   "id": "top-n-top-200-orders-this-month-answers-in-full",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 200 orders by rejects this month",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=month&by=order&rank=most&top=200",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "group_by": [
+        "order"
+       ],
+       "filters": {},
+       "shift": null,
+       "compare": null,
+       "limit": 200
+      }
+     }
+    ],
+    "sections_match": [
+     "^SO-2609180122 had the most dry-end rejects this month: \\*\\*3,643\\.6 sq ft\\*\\*",
+     "largest first, top 200"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 2: 69d8a15 stopped at context_limit."
+  },
+  {
+   "id": "top-n-a-second-numbered-period-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime P2 vs P9",
+   "expect": {
+    "raises": "^'p9' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Set the day control to a day in P9\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: every P-number said is checked, not only the first: 69d8a15 and main answered P2's review, 3.25%, with P9 neither read nor refused; no question is offered, since two periods are said."
+  },
+  {
+   "id": "top-n-a-period-number-in-words-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime fiscal period 9",
+   "expect": {
+    "raises": "^'p9' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Ask 'downtime this period' for P2, or set the day control to a day in P9\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: a period's number said in words is its P-number: 69d8a15 and main answered P2's review, 3.25%."
+  },
+  {
+   "id": "top-n-an-accounting-period-number-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime accounting period 1",
+   "expect": {
+    "raises": "^'p1' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Ask 'downtime last period', or set the day control to a day in P1\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: 69d8a15 and main answered P2's review, 3.25%."
+  },
+  {
+   "id": "top-n-a-bare-period-number-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in period 9",
+   "expect": {
+    "raises": "^'p9' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Ask 'downtime this period' for P2, or set the day control to a day in P9\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: 69d8a15 and main answered the selected day's review, 2.88%."
+  },
+  {
+   "id": "top-n-the-selected-period-in-words-answers",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime period 2",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.25%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: the selected period said in words is P2: 69d8a15 and main answered the selected day's review, 2.88%."
+  },
+  {
+   "id": "top-n-a-numbered-period-offers-only-what-answers",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in P9 2026",
+   "expect": {
+    "raises": "^'p9' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Set the day control to a day in P9\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: the question a refusal offers is one the router answers: 'downtime this period 2026' is refused, so none is offered; 69d8a15 and main answered P2's review, 3.25%."
+  },
+  {
+   "id": "top-n-the-last-fiscal-period-is-rolling",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime the last fiscal period",
+   "expect": {
+    "raises": "^A rolling window \\('the last fiscal period'\\) is not one the records keep: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\. Ask 'downtime last period' for the 4-4-5 period before the selected one\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 4: the reviewer subagent's check of this round: 69d8a15 and main answered P2's review, 3.25%: 'the last fiscal period' is read as 'the last period' is."
+  },
+  {
+   "id": "top-n-a-count-the-last-fiscal-period-is-rolling",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many stops the last fiscal period",
+   "expect": {
+    "raises": "^A rolling window \\('the last fiscal period'\\) is not one the records keep: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\. Ask 'how many stops last period' for the 4-4-5 period before the selected one\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 4: the reviewer subagent's check of this round: the quantity route: 69d8a15 and main refused \"'last' asks for one stop\"."
+  },
+  {
+   "id": "top-n-in-aug-is-august",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Aug",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2\\.67%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's check of this round: every month said short is a model entry, as 'Sept' is: 69d8a15 and main answered the selected day's review, 2.88%."
+  },
+  {
+   "id": "top-n-in-jan-is-january",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf in Jan",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=grade&window=2026-01",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-01-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*168,186\\.6 MSF\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's check of this round: 69d8a15 and main answered the selected day's grade totals, 7,426.7 MSF."
+  },
+  {
+   "id": "top-n-the-coming-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime the coming week",
+   "expect": {
+    "raises": "^'coming week' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's check of this round: a window after the selected day (windows.future): 69d8a15 and main answered this week's review, 2.90%."
+  },
+  {
+   "id": "top-n-next-two-weeks-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime next 2 weeks",
+   "expect": {
+    "raises": "^'next 2 weeks' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's check of this round: 'next' with a count of weeks: 69d8a15 and main answered this week's review, 2.90%."
+  },
+  {
+   "id": "top-n-the-week-after-next-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime the week after next",
+   "expect": {
+    "raises": "^'week after next' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's check of this round: 69d8a15 and main answered this week's review, 2.90%."
   }
  ]
 }
