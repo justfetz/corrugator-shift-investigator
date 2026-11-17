@@ -72,6 +72,7 @@ from investigator.agent import PERIOD_TOOLS, STORE_TOOLS, TOOL_SCHEMAS, Agent, C
 from investigator import semantic  # noqa: E402
 from investigator.urls import resolve_url  # noqa: E402
 from investigator import judge as judging  # noqa: E402
+from investigator import examples as verified  # noqa: E402  the verified examples (issue #187): their reading score
 from investigator.cost_model import parse_rates  # noqa: E402
 from investigator import targets as owner_targets  # noqa: E402  the owner's bands (targets.json), read as data
 from investigator.record_store import RecordStore, dataset_window, default_store  # noqa: E402
@@ -2530,6 +2531,8 @@ def main(argv=None):
             judged = None
     else:
         print(stored_judge_line(stale_recordings(rows)))
+    reading = reading_score()
+    print_reading(reading)
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)
     skipped = sum(r['outcome'] == 'skip' for r in rows)
     xfailed = sum(r['outcome'] == 'xfail' for r in rows)
@@ -2543,7 +2546,7 @@ def main(argv=None):
         HISTORY.parent.mkdir(parents=True, exist_ok=True)
         with HISTORY.open('a') as out:
             out.write(json.dumps(line, separators=(',', ':')) + '\n')
-        LAST_RUN.write_text(json.dumps(last_run(rows, line), indent=1) + '\n')
+        LAST_RUN.write_text(json.dumps(last_run(rows, line, reading), indent=1) + '\n')
         if judged:
             JUDGE_LAST_RUN.write_text(json.dumps({'ran_at': line['ran_at'], 'commit': line['commit'], 'dataset': line['dataset'],
                                                   'summary': judged[1], 'rows': judged[0]}, indent=1) + '\n')
@@ -2610,13 +2613,32 @@ HISTORY = ROOT / 'evals' / 'history.jsonl'
 LAST_RUN = ROOT / 'evals' / 'last_run.json'
 
 
-def last_run(rows, line):
+def last_run(rows, line, reading=None):
     """The rows behind the newest history line: id, case, type, provider, outcome and ms per row.
     `ran_at` and `commit` are that line's, so a reader can tell the two files belong together; the
-    /evals page shows each case's result from here without running anything. A scaled run's `latency_scale` comes along."""
+    /evals page shows each case's result from here without running anything. A scaled run's `latency_scale` comes along,
+    and the verified examples' reading score of the same run (issue #187), which /evals shows beside the judge."""
     return {'ran_at': line['ran_at'], 'commit': line['commit'], 'dataset': line['dataset'],
             **({'latency_scale': line['latency_scale']} if 'latency_scale' in line else {}),
+            **({'reading': reading} if reading is not None else {}),
             'rows': [{k: r[k] for k in ('id', 'case', 'type', 'provider', 'mode', 'outcome', 'ms', 'note')} for r in rows]}
+
+
+# ---------------------------------------------------------------- the verified examples' reading score (issue #187)
+def reading_score():
+    """How many of the verified examples' wordings (examples.json: the owner's own words and five rewordings each) the offline
+    router reads as the example's plan, on the golden page. It runs no case and calls no model; it is reported, never a gate:
+    the read-back planner (issue #172) owns raising it."""
+    return verified.reading_score(golden_store())
+
+
+def print_reading(score):
+    """The score's line, then every wording it missed with what the offline router read it as."""
+    print(verified.score_line(score))
+    for row in score['rows']:
+        if row['outcome'] != 'pass':
+            said = "the owner's words" if row['owner'] else 'rewording'
+            print(f'  - {row["example"]} ({said}): {row["text"]!r} read as {row["read_as"]}')
 
 
 def offline_latency(rows):

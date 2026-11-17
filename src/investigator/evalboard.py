@@ -293,6 +293,20 @@ class EvalBoard:
             return {}
         return {row['id']: {'outcome': row['outcome'], 'ms': row['ms'], 'note': row.get('note', '')} for row in recorded.get('rows', [])}
 
+    def _reading(self, newest):
+        """The verified examples' reading score of the newest tracked run (issue #187): how many of their wordings the offline
+        router read as the example's plan, and each wording it missed. None when last_run.json is not that run's, or carries none.
+        Reported beside the judge, never a gate."""
+        path = self.folder / 'last_run.json'
+        if not newest or not path.is_file():
+            return None
+        recorded = json.loads(path.read_text())
+        if (recorded.get('ran_at'), recorded.get('commit')) != (newest['ran_at'], newest['commit']) or not recorded.get('reading'):
+            return None
+        score = recorded['reading']
+        return {**{k: score[k] for k in ('read', 'of', 'owner_read', 'owner_of', 'examples', 'interim', 'page') if k in score},
+                'misses': [{k: r[k] for k in ('example', 'text', 'owner', 'window', 'read_as')} for r in score['rows'] if r['outcome'] != 'pass']}
+
     def _fixture(self, case, provider):
         path = self.runner.fixture_path(case['id'], provider)
         if not path.is_file():
@@ -354,7 +368,7 @@ class EvalBoard:
                 'thresholds': {'live_pass_rate': self.runner.THRESHOLDS, 'offline_latency_ms': self.runner.LATENCY_BUDGET_MS,
                                'case_max_ms': self.runner.DEFAULT_MAX_MS},
                 'last_run': newest, 'history': history, 'types': list(self.runner.TYPES), 'cases': cases,
-                'judge': self._judge(history, self._rerecord)}
+                'judge': self._judge(history, self._rerecord), 'reading': self._reading(newest)}
 
     def board(self, public=False):
         """The page's data. The hosted demo's copy leaves out the judge's reasons: they are model prose that no check

@@ -23516,6 +23516,221 @@
    "expect": {
     "raises": "Selected shift only"
    }
+  },
+  {
+   "id": "examples-peel-pct-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "peel % this week",
+   "note": "Issue #187: the roll entity's peel by weight, read by the model's own words; before the fix its answer raised KeyError 'roll' (no where-to-look for rolls), the reviewer of the PR found.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=peel_pct&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "peel_pct",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Peel of paper consumed this week: \\*\\*[0-9][0-9,.]*%\\*\\* of roll stock consumed · (home run|on target|over|flag)",
+     "^Read as: peel of paper consumed in % of roll stock consumed, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-core-pct-this-month",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "core percent this month",
+   "note": "Issue #187: core by weight against the owner's core band, read over all shifts (a roll carries no shift).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=core_pct&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "core_pct",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Core of paper consumed this month: \\*\\*[0-9][0-9,.]*%\\*\\* of roll stock consumed · (home run|on target|over|flag)",
+     "^Read as: core of paper consumed in % of roll stock consumed, September 2026 \\(2026-09-01 to 2026-09-30\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-peel-and-core-pct-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "peel and core % this week",
+   "note": "Issue #187: the owner's 'peel and core, on average', by weight: pounds of peel and core over the pounds of paper consumed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=peel_core_pct&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "peel_core_pct",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Peel and core of paper consumed this week: \\*\\*[0-9][0-9,.]*%\\*\\* of roll stock consumed \\(query 1\\)",
+     "^Read as: peel and core of paper consumed in % of roll stock consumed, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-speed-gap-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed gap by grade this week",
+   "note": "Issue #187: each grade's speed gap in ft/min, its paper runs' feet under the baseline over its running minutes (on main this question answered the grade totals).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_gap_fpm&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_gap_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Speed gap to grade baseline this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*",
+     "^Read as: speed gap to grade baseline in ft/min by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-baseline-speed-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "baseline speed by grade this week",
+   "note": "Issue #187: each grade's speed baseline (targets.json), the tools' own (on main this question answered the trend).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=baseline_speed_fpm&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "baseline_speed_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Grade baseline speed this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*",
+     "^Read as: grade baseline speed in ft/min by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-recoverable-footage-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "recoverable footage by grade this week",
+   "note": "Issue #187: targets.json's speed gap, each paper run under its grade's baseline, summed by grade; never negative. The reviewer of the PR found the first draft netted the runs (a grade could read negative footage).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_gap_ft&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_gap_ft",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Footage recoverable this week: \\*\\*[0-9][0-9,.]* ft\\*\\*",
+     "^Read as: footage recoverable in ft by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-downtime-of-the-clock-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime of the clock by grade this week",
+   "note": "Issue #187: each grade's minutes stopped over its own setup clock, the owner's 'downtime % of that grade's time on the machine'.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_clock_pct&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_clock_pct",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Downtime of the setup clock this week: \\*\\*[0-9][0-9,.]*%\\*\\* of setup clock",
+     "^Read as: downtime of the setup clock in % of setup clock by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
   }
  ]
 }

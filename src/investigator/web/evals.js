@@ -140,6 +140,22 @@ function renderJudge(isPublic){
  $('judge-rows').replaceChildren(rh,rb);
 }
 
+// ---- The verified examples' reading score (issue #187): how many of their wordings the offline router reads as the example's
+// plan, from the newest tracked run, and each wording it read another way. Reported, never a gate.
+function renderReading(){
+ const r=board.reading;
+ if(!r){$('reading-summary').textContent='No reading score is tracked with the newest run: python3 evals/run.py --track writes it.';$('reading-detail').hidden=true;return;}
+ const page=r.page?`, asked on ${r.page.day}${r.page.shift?' with the page on shift '+r.page.shift:''}`:'';
+ $('reading-summary').textContent=`Verified examples read correctly: ${r.read} of ${r.of} wordings of ${r.examples} examples (the owner’s own words: ${r.owner_read} of ${r.owner_of})${page}`
+  +(r.interim?` · ${r.interim} expected in an interim window, the 4-4-5 period, until the model reads the year to date (PR #186)`:'');
+ const misses=r.misses||[]; $('reading-detail').hidden=!misses.length;
+ $('reading-rows-title').textContent=`Wordings read another way (${misses.length})`;
+ const head=node('thead'), hr=node('tr'); for(const label of ['Example','Wording','Window','Read as']){const th=node('th',label);th.scope='col';hr.append(th);} head.append(hr);
+ const body=node('tbody');
+ for(const m of misses){const tr=node('tr'); tr.append(node('td',m.example),node('td',(m.owner?'Owner: ':'')+m.text),node('td',m.window||'—'),node('td',m.read_as)); body.append(tr);}
+ $('reading-rows').replaceChildren(head,body);
+}
+
 // ---- Cases: one disclosure per case. Opening it runs the case here and draws expected beside actual.
 function setUrl(caseId){
  try{const params=new URLSearchParams(); if(typeFilter!=='all')params.set('type',typeFilter); if(caseId)params.set('case',caseId); const q=params.toString(); window.history.replaceState(null,'','/evals'+(q?'?'+q:''));}catch(e){}
@@ -257,7 +273,7 @@ async function init(){
   const [boardResponse,configResponse]=await Promise.all([fetch('/evals.json'),fetch('/api/config')]);
   if(!boardResponse.ok)throw new Error('The golden set is not available on this server.');
   board=await boardResponse.json(); const config=configResponse.ok?await configResponse.json():{}; token=config.token||null;
-  renderSummary();renderScore(null);renderTrend();renderJudge(config.public!==false);renderFilter();renderCases();
+  renderSummary();renderScore(null);renderTrend();renderJudge(config.public!==false);renderReading();renderFilter();renderCases();
   $('run-all').addEventListener('click',runAll);
   await applyUrl();
  }catch(error){$('summary').textContent=error.message;}

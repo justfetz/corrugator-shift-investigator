@@ -1,0 +1,855 @@
+{
+ "about": "The verified examples (issue #187): the owner's SLT questions of 17 Nov, each with his definition and the exact semantic query that answers it. A plan names its window by a relative window of the semantic model's defaults block, read on the page's day; with no window said it is the year to date (the no_window default), and the alternates are the period to date, last week and the previous period. Every plan is validated against the semantic model when the file loads (examples.load), and tests/test_examples.py checks every example's rows against a hand-written SQL query over the record tables at two anchors, so no expected number is typed anywhere. reviewed_by is owner-pending until the owner checks the numbers; each example carries five rewordings, owner-pending, beside his own words, and the reading score asks each of the offline router (evals/run.py, /evals).",
+ "examples": [
+  {
+   "id": "top-maintenance-downtimes",
+   "lever": "downtime",
+   "question": "What are our top maintenance downtimes?",
+   "definition": "Top 5 reasons by downtime minutes, maintenance kind, with stops and minutes per stop",
+   "plan": {
+    "measure": "downtime_minutes",
+    "group_by": [
+     "reason"
+    ],
+    "filters": {
+     "kind": "Maintenance"
+    },
+    "order": "value",
+    "limit": 5,
+    "shift": null,
+    "window": "ytd"
+   },
+   "beside": [
+    "stops",
+    "minutes_per_stop"
+   ],
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "top_n",
+    "reason_ranking"
+   ],
+   "reviewed_by": "owner-pending",
+   "rewordings": [
+    {
+     "text": "What are our top maintenance downtimes this year?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "top maintenance downtime reasons year to date",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which maintenance reasons had the most downtime minutes last week?",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "top 5 maintenance downtime reasons by minutes in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What were the biggest maintenance downtime reasons this period?",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ],
+   "notes": "Each reason with its share of the maintenance minutes, its stops and its minutes per stop beside (the reason_ranking default)."
+  },
+  {
+   "id": "where-is-the-downtime",
+   "lever": "downtime",
+   "question": "Where is the downtime?",
+   "definition": "Minutes by kind and reason, as a percent of scheduled time",
+   "plan": {
+    "measure": "downtime_pct",
+    "group_by": [
+     "kind",
+     "reason"
+    ],
+    "filters": {},
+    "order": "value",
+    "limit": 25,
+    "shift": null,
+    "window": "ytd"
+   },
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "Each row is one kind and reason of stop: its minutes (the ratio's numerator) and their percent of all the window's scheduled minutes, largest first, every row.",
+   "rewordings": [
+    {
+     "text": "Where is our downtime this year, by kind and reason?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "downtime % by stop kind and reason year to date",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What share of scheduled time did each kind and reason of downtime take last week?",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Where did the downtime go in the previous period?",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "downtime as a percent of scheduled minutes by kind and reason this period",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "speed-loss-contributors",
+   "lever": "speed",
+   "question": "What are the top three contributors to speed loss?",
+   "definition": "Feet lost against each grade's baseline, by contributor, top 3",
+   "plan": {
+    "rank_together": [
+     {
+      "measure": "stop_loss_ft",
+      "group_by": [
+       "reason"
+      ]
+     },
+     {
+      "measure": "speed_gap_ft",
+      "group_by": [
+       "grade"
+      ]
+     }
+    ],
+    "order": "value",
+    "limit": 3,
+    "shift": null,
+    "window": "ytd"
+   },
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "speed_loss"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The contributors are the owner's to rule (owner-pending, the defaults' speed_loss rule): each unplanned stop reason's minutes at the stopped setup's grade baseline, and each grade's speed gap (its paper runs' feet under the baseline while running, targets.json), ranked together in feet. Planned maintenance (schedule-driven) and a power outage (external) are left out of the stops.",
+   "rewordings": [
+    {
+     "text": "top 3 contributors to speed loss this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What cost us the most footage against baseline year to date?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "biggest speed losses last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Where did we lose the most feet against the grade baselines in the previous period?",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "top three speed loss contributors this period",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "best-running-grades",
+   "lever": "speed",
+   "question": "What are our best running grades?",
+   "definition": "Ranked by lineal ft/min (running), beside each grade's baseline, with the gap and the footage recoverable by closing it",
+   "plan": {
+    "measure": "speed_run_fpm",
+    "group_by": [
+     "grade"
+    ],
+    "filters": {},
+    "order": "value",
+    "limit": 5,
+    "shift": null,
+    "window": "ytd"
+   },
+   "beside": [
+    "baseline_speed_fpm",
+    "speed_gap_fpm",
+    "speed_gap_ft"
+   ],
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "top_n"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The best of the two readings of 'best and worst running grades'. Beside each grade: its baseline, the footage recoverable (targets.json's speed gap: each of the grade's paper runs that ran under the baseline, the feet it would have made at the baseline less the feet it made, summed) and that gap in ft/min over all the grade's running minutes. A grade that ran faster than its baseline on average can still have runs under it, so its gap is never negative.",
+   "rewordings": [
+    {
+     "text": "best running grades this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which grades ran fastest year to date?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "fastest grades by running speed last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "top 5 grades by speed without stops in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which board grades had the best running speed this period?",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "worst-running-grades",
+   "lever": "speed",
+   "question": "What are our worst running grades?",
+   "definition": "Ranked by lineal ft/min (running), beside each grade's baseline, with the gap and the footage recoverable by closing it",
+   "plan": {
+    "measure": "speed_run_fpm",
+    "group_by": [
+     "grade"
+    ],
+    "filters": {},
+    "order": "value_asc",
+    "limit": 5,
+    "shift": null,
+    "window": "ytd"
+   },
+   "beside": [
+    "baseline_speed_fpm",
+    "speed_gap_fpm",
+    "speed_gap_ft"
+   ],
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "top_n"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The worst of the two readings of 'best and worst running grades': the slowest first, with the same columns beside.",
+   "rewordings": [
+    {
+     "text": "worst running grades this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which grades ran slowest year to date?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "slowest grades by running speed last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "bottom 5 grades by speed without stops in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which board grades had the worst running speed this period?",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "stops-on-worst-running-grades",
+   "lever": "speed",
+   "question": "What are the stops on the worst running grades?",
+   "definition": "Per grade: stops, minutes down, minutes per stop, and downtime % of that grade's time on the machine",
+   "plan": {
+    "measure": "speed_run_fpm",
+    "group_by": [
+     "grade"
+    ],
+    "filters": {},
+    "order": "value_asc",
+    "limit": 5,
+    "shift": null,
+    "window": "ytd"
+   },
+   "beside": [
+    "stops",
+    "downtime_minutes",
+    "minutes_per_stop",
+    "downtime_clock_pct"
+   ],
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "top_n"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The worst running grades (slowest first, as in worst-running-grades), each with its stops beside: a grade's time on the machine is its setups' own clock.",
+   "rewordings": [
+    {
+     "text": "stops on the worst running grades this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "How many stops did the slowest grades have year to date?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "downtime on the worst running grades last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "stops and minutes down for the slowest grades in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What stopped the worst running grades this period?",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "where-is-the-waste",
+   "lever": "waste",
+   "question": "Where is the waste?",
+   "definition": "Waste by line: trim, shear/chop, dry end, peel and core",
+   "plan": {
+    "lines": [
+     {
+      "measure": "trim_pct"
+     },
+     {
+      "measure": "shear_pct"
+     },
+     {
+      "measure": "dry_end_pct"
+     },
+     {
+      "measure": "peel_pct"
+     },
+     {
+      "measure": "core_pct"
+     }
+    ],
+    "shift": null,
+    "window": "ytd"
+   },
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "Each line in its own unit, against its own band: side trim and shear as a percent of gross, dry end of the yield after trim and shear, peel and core of the paper consumed by weight.",
+   "rewordings": [
+    {
+     "text": "Where is our waste this year?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "waste by line year to date",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "trim, shear, dry-end, peel and core waste last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Where did the waste come from in the previous period?",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What were the waste lines this period?",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "high-trim-by-grade",
+   "lever": "waste",
+   "question": "What's high trim?",
+   "definition": "Trim % of gross against the bands, by grade and by setup",
+   "plan": {
+    "measure": "trim_pct",
+    "group_by": [
+     "grade"
+    ],
+    "filters": {},
+    "order": "value",
+    "limit": 5,
+    "shift": null,
+    "window": "ytd"
+   },
+   "beside": [
+    "setups_above_trim_target"
+   ],
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "top_n"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The by-grade reading: each grade's side trim as a percent of its gross against the trim band, with the setups over the trim flag beside.",
+   "rewordings": [
+    {
+     "text": "high trim by grade this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which grades had the highest trim % year to date?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "trim percent by board grade last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "top 5 grades by side trim % in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which grades ran over the trim band this period?",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "high-trim-by-setup",
+   "lever": "waste",
+   "question": "What's high trim?",
+   "definition": "Trim % of gross against the bands, by grade and by setup",
+   "plan": {
+    "measure": "setups_above_trim_target",
+    "group_by": [
+     "grade"
+    ],
+    "filters": {},
+    "order": "value",
+    "limit": 5,
+    "shift": null,
+    "window": "ytd"
+   },
+   "beside": [
+    "setups"
+   ],
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "top_n"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The by-setup reading at the level the model keeps: each setup's own trim % against the owner's trim flag, the setups over it counted by grade (a grade with none has no row), with every setup of the grade beside. A list of the setups themselves needs a setup dimension, which this model does not hold yet (named in issue #187's pull request).",
+   "rewordings": [
+    {
+     "text": "setups over the trim flag by grade this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which grades had the most high trim setups year to date?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "high trim setups by grade last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "number of setups over the trim flag per grade in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which grades had setups above the trim target this period?",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "shear-by-grade",
+   "lever": "waste",
+   "question": "Shear or chop by grade, shift or machine",
+   "definition": "Shear % of gross, split by the dimension asked",
+   "plan": {
+    "measure": "shear_pct",
+    "group_by": [
+     "grade"
+    ],
+    "filters": {},
+    "order": "value",
+    "limit": 25,
+    "shift": null,
+    "window": "ytd"
+   },
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The by-grade reading: every grade, largest first.",
+   "rewordings": [
+    {
+     "text": "shear by grade this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "chop % by board grade year to date",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "shear percent by grade last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "shear % of gross by grade in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "chop waste % by grade this period",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "shear-by-shift",
+   "lever": "waste",
+   "question": "Shear or chop by grade, shift or machine",
+   "definition": "Shear % of gross, split by the dimension asked",
+   "plan": {
+    "measure": "shear_pct",
+    "group_by": [
+     "shift"
+    ],
+    "filters": {},
+    "order": "dimension",
+    "limit": 25,
+    "shift": null,
+    "window": "ytd"
+   },
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The by-shift reading: shifts 1, 2 and 3 in order.",
+   "rewordings": [
+    {
+     "text": "shear by shift this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "chop % by shift year to date",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "shear percent by shift last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "compare shear % across shifts in the previous period",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "shear % of gross for each shift this period",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "shear-by-machine",
+   "lever": "waste",
+   "question": "Shear or chop by grade, shift or machine",
+   "definition": "Shear % of gross, split by the dimension asked",
+   "plan": {
+    "measure": "shear_pct",
+    "group_by": [],
+    "filters": {},
+    "order": null,
+    "limit": 25,
+    "shift": null,
+    "window": "ytd"
+   },
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "by_machine"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "The by-machine reading: the records hold one corrugator, so the answer is the window's shear for it and says so (the by_machine default).",
+   "rewordings": [
+    {
+     "text": "shear by machine this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "chop % by corrugator year to date",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "shear percent by machine last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What was each machine's shear in the previous period?",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "shear % per corrugator this period",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "dry-end-top-reasons",
+   "lever": "waste",
+   "question": "Tag scrap / dry-end waste top reasons",
+   "definition": "One thing: dry-end rejects by reason, top 5",
+   "plan": {
+    "measure": "reject_sqft",
+    "group_by": [
+     "reject_reason"
+    ],
+    "filters": {},
+    "order": "value",
+    "limit": 5,
+    "shift": null,
+    "window": "ytd"
+   },
+   "beside": [
+    "dry_end_pct"
+   ],
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "top_n"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "Tag scrap and dry-end waste are one thing: the dry-end reject lines, in square feet, each with its part of all the yield beside. Customer credits for bond or warp join this family once shipments exist (customer-credits).",
+   "rewordings": [
+    {
+     "text": "top dry-end waste reasons this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "top 5 tag scrap reasons year to date",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "biggest dry end reject reasons last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which reject reasons had the most square feet in the previous period?",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "top reasons for dry-end rejects this period",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "customer-credits",
+   "lever": "waste",
+   "question": "What are our customer credits for bond and warp?",
+   "definition": "Customer credits for bond or warp join the dry-end reject family once shipments exist",
+   "refusal": {
+    "absent": "customer_credits"
+   },
+   "rules": [
+    "customer_credits"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "Refused naming what is missing: the records hold no shipments.",
+   "rewordings": [
+    {
+     "text": "How much did we credit customers for warp this year?",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "customer credits year to date",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "bond and warp credits last week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What did customer claims cost us in the previous period?",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "Which customers got credits this period?",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  },
+  {
+   "id": "peel-and-core",
+   "lever": "waste",
+   "question": "Peel and core, on average",
+   "definition": "Pounds of peel and core divided by pounds of paper consumed, as a percent",
+   "plan": {
+    "measure": "peel_core_pct",
+    "group_by": [],
+    "filters": {},
+    "order": null,
+    "limit": 25,
+    "shift": null,
+    "window": "ytd"
+   },
+   "alternates": [
+    "ptd",
+    "last_week",
+    "previous_period"
+   ],
+   "rules": [
+    "no_window",
+    "peel_core_weight"
+   ],
+   "reviewed_by": "owner-pending",
+   "notes": "By weight: each roll's paper grade names its basis weight in lb per MSF, and the paper consumed is what the rolls gave up (fed, peeled and left on cores). The rolls carry no shift, so it is read over all shifts.",
+   "rewordings": [
+    {
+     "text": "peel and core % this year",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "What's our average peel and core year to date?",
+     "window": "ytd",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "peel and core as a percent of paper consumed last week",
+     "window": "last_week",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "How much paper went to peel and core in the previous period?",
+     "window": "previous_period",
+     "reviewed_by": "owner-pending"
+    },
+    {
+     "text": "peel and core percent this period",
+     "window": "period",
+     "reviewed_by": "owner-pending"
+    }
+   ]
+  }
+ ]
+}
