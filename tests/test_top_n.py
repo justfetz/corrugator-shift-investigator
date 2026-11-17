@@ -498,6 +498,11 @@ def test_window_words_said_short_are_model_entries():
     from investigator import agent
     model = S.model()
     assert {'wk': 'week', 'mo': 'month', 'sept': 'september', 'ptd': 'period to date', 'q-3': 'q3', '3q': 'q3'}.items() <= model.shorthand.items()
+    assert {'aug': 'august', 'dec': 'december', 'jan': 'january'}.items() <= model.short_months.items()
+    # ... a month said short only where a window stands (the reviewer's re-check: "the dec in speed" was December's speed)
+    assert agent.read_shorthand('downtime in aug, since 1 jan, dec 2025') == 'downtime in august, since 1 january, december 2025'
+    said = 'what caused the dec in speed, did trim inc or dec, the current apr'
+    assert agent.read_shorthand(said) == said
     assert {'next week', 'next month'} <= set(model.future)
     assert agent.read_shorthand('downtime last wk in sept, ptd, q-3 or 3q') == 'downtime last week in september, period to date, q3 or q3'
     assert agent.read_shorthand('the wks-long run') == 'the wks-long run'   # never inside a hyphenated word
@@ -555,7 +560,7 @@ def test_a_numbered_period_is_the_selected_one_or_refused_naming_it(store, quest
     context = Context(DAY, 2, scope=scope, period='day')
     with pytest.raises(ValueError, match=r"^'p1[0-3]?' is not|^'p[0-9]+' is not"):
         route(question, context, store.production_days, store)
-    for kept in ('top operator reasons P2', 'how many stops in P2', 'downtime period 2'):
+    for kept in ('top operator reasons P2', 'how many stops in P2', 'downtime period 2', 'compare P2 to P1', 'trim in P2 vs P1'):
         request, _ = route(kept, context, store.production_days, store)
         assert request['plan'][0]['arguments']['window']['period'] == 'fiscal'
 
@@ -601,7 +606,7 @@ def test_a_long_ranking_is_bounded_for_the_planner_never_on_the_card(store, ques
 def test_a_numbered_period_offers_only_a_question_the_router_answers(store):
     """The reviewer's check of round 2: "downtime in P9 2026" offered 'downtime this period 2026', itself refused; "P1 vs P2" two windows."""
     context = Context(DAY, 2, scope='shift', period='day')
-    for question in ('downtime in P9 2026', 'downtime P1 vs P2', 'downtime P1-P3', 'downtime P2 vs P9'):
+    for question in ('downtime in P9 2026', 'downtime P9 vs P2', 'downtime P1-P3', 'downtime P2 vs P9'):
         with pytest.raises(ValueError, match=r"Set the day control to a day in P\d\.$"):
             route(question, context, store.production_days, store)
     with pytest.raises(ValueError, match=r"Ask 'downtime last period', or set the day control to a day in P1\.$"):

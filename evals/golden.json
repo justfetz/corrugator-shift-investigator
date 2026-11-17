@@ -27543,6 +27543,352 @@
     "raises": "^'week after next' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
    },
    "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's check of this round: 69d8a15 and main answered this week's review, 2.90%."
+  },
+  {
+   "id": "top-n-dec-the-word-is-no-month",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "what caused the dec in speed this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*629\\.5 ft/min\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: a month said short is read only where a window stands: 5a2adf6 read 'dec' as December and answered December 2025's speed (649.6 ft/min); 69d8a15 and main this week's, as now. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-inc-or-dec-is-no-month",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "did trim inc or dec this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.45%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: 5a2adf6 answered December 2025's waste breakdown (3.03%); 69d8a15 and main this week's, as now. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-apr-the-word-is-no-month",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "what is the trim cost at the current apr",
+   "expect": {
+    "raises": "^Offline mode supports"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: 5a2adf6 read 'apr' as April and answered April 2026's waste breakdown; 69d8a15 and main refused, as now. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-in-mar-is-march",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf in mar",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=grade&window=2026-03",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-03-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*165,187\\.5 MSF\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: a month said short after a preposition: 69d8a15 and main answered the selected day's grade totals, 7,426.7 MSF."
+  },
+  {
+   "id": "top-n-two-months-said-short-compared",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "compare Aug to Jul",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=kpis&window=2026-08&compare=2026-07",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "compare_periods",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2,518\\.3 MSF/day\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: 69d8a15 and main answered the day's shift speed comparison; now August's KPI tiles with July's beside."
+  },
+  {
+   "id": "top-n-the-period-before-compared-answers",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "compare P2 to P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=kpis&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*51,479\\.0 MSF\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's re-check of this round: the period just before, compared with the selected one, is the comparison the KPI tiles carry, as on main and at 69d8a15: 5a2adf6 refused it. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-the-period-before-compared-answers-all",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "how did P2 go versus P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=kpis&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*147,400\\.2 MSF\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's re-check of this round: the page on All; 5a2adf6 refused it. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-the-waste-of-the-period-before-compared",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in P2 vs P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.45%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's re-check of this round: the waste breakdown carries the period before beside the selected one; 5a2adf6 refused it. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-another-period-compared-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "compare P2 to P9",
+   "expect": {
+    "raises": "^'p9' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Set the day control to a day in P9\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's re-check of this round: a period compared that is not the one before: 69d8a15 and main answered P2 against P1, never P9."
+  },
+  {
+   "id": "top-n-a-trend-keeps-its-own-window-words",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime trend over the last month",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=trend&metric=downtime_pct",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_trend",
+      "arguments": {
+       "metric": "downtime_pct",
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.32%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 4: the reviewer subagent's re-check of this round: the trend reads its own window words, as docs/ASKING.md says: 5a2adf6 refused it as a rolling window; 69d8a15 and main answered the 8-week trend, as now. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-a-speed-trend-keeps-its-own-window-words",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed trend over the last week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=trend&metric=speed_all_fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_trend",
+      "arguments": {
+       "metric": "speed_all_fpm",
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*608\\.6 ft/min\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 4: the reviewer subagent's re-check of this round: 5a2adf6 refused it as a rolling window. A guard at 69d8a15."
+  },
+  {
+   "id": "top-n-last-fiscal-period-is-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime last fiscal period",
+   "expect": {
+    "url": "/corr/1/period/2026-08-03?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-08-03"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2\\.62%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 4: the reviewer subagent's re-check of this round: 'last fiscal period' moves the scope as 'last period' does: 69d8a15 and main answered P2's review (3.25%), the selected period; now P1's, 2.62%."
+  },
+  {
+   "id": "top-n-the-previous-fiscal-period-is-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime the previous fiscal period",
+   "expect": {
+    "url": "/corr/1/period/2026-08-03?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-08-03"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2\\.62%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 4: the reviewer subagent's re-check of this round: 69d8a15 and main answered P2's review, 3.25%."
+  },
+  {
+   "id": "top-n-the-coming-weeks-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in the coming weeks",
+   "expect": {
+    "raises": "^'coming weeks' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: a window after the selected day, said in the plural: 69d8a15 and main answered this week's review, 2.90%."
+  },
+  {
+   "id": "top-n-the-day-after-next-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime the day after next",
+   "expect": {
+    "raises": "^'day after next' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: 69d8a15 and main answered the selected day's shift downtime, 3.95%."
+  },
+  {
+   "id": "top-n-next-two-shifts-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime next 2 shifts",
+   "expect": {
+    "raises": "^'next 2 shifts' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: 69d8a15 and main answered the selected day's shift downtime, 3.95%."
   }
  ]
 }

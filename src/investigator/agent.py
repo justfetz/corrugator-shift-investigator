@@ -871,14 +871,25 @@ WINDOW_TEXT = ("'{words}' is not a window the router reads: one quantity reads t
 _SHORTHAND = {}
 
 
+# ... a month said short ("Aug", "Dec") only where a window stands: after a preposition, a comparison or a day's number ("in Aug",
+# "since 1 Jan", "versus Jul"), or before a year ("Dec 2025"); never "the dec in speed", "did trim inc or dec" or "the current apr"
+# (the reviewer's re-check of round 2)
+MONTH_LEAD = (r"(?:in|for|during|of|since|through|thru|from|to|until|till|over|across|versus|vs\.?|than|between|compare|"
+              r"\d{1,2}(?:st|nd|rd|th)?)")
+
+
 def read_shorthand(lower):
-    """`lower` with each window word said short replaced by the words it shortens (semantic_model.json, windows.shorthand)."""
-    words = semantic.model().shorthand
-    if not words:
-        return lower
+    """`lower` with each window word said short replaced by the words it shortens (semantic_model.json, windows.shorthand), and each
+    month said short (windows.shorthand.months) where a window stands."""
+    model = semantic.model()
+    words, months = model.shorthand, model.short_months
     if 'pattern' not in _SHORTHAND:
-        _SHORTHAND['pattern'] = re.compile(r"(?<![\w-])(" + '|'.join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")(?![\w-])")
-    return _SHORTHAND['pattern'].sub(lambda m: words[m[1]], lower)
+        _SHORTHAND['pattern'] = re.compile(r"(?<![\w-])(" + '|'.join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")(?![\w-])") if words else None
+        said = '|'.join(re.escape(w) for w in sorted(months, key=len, reverse=True)) or '(?!)'
+        _SHORTHAND['months'] = re.compile(rf"\b(?P<lead>{MONTH_LEAD}\s+)(?P<m>{said})\b|\b(?P<y>{said})\b(?=\.?\s*,?\s*(?:19|20)\d\d\b)")
+    if _SHORTHAND['pattern'] is not None:
+        lower = _SHORTHAND['pattern'].sub(lambda m: words[m[1]], lower)
+    return _SHORTHAND['months'].sub(lambda m: m['lead'] + months[m['m']] if m['m'] else months[m['y']], lower)
 
 
 # A year said beside a month's name ("September 2026", "December, 2025", "August of 2025"): the month of that year (the coordinator's
@@ -962,8 +973,13 @@ def numbered_period(lower, anchor, answers=None):
     before = fiscal_period(previous_window('fiscal', start, end)[0])[3]
     offer = swap('last period') if asked == before else swap('this period')
     ask = (f"Ask '{offer}'" + ('' if asked == before else f" for P{number}") + ", or set") if offer else 'Set'
-    return Standing(f"'{said[0]}' is not the 4-4-5 period that holds the selected day, {held}: a period said by its number is read only "
-                    f"as that one. {ask} the day control to a day in P{asked}.")
+    refusal = Standing(f"'{said[0]}' is not the 4-4-5 period that holds the selected day, {held}: a period said by its number is read only "
+                       f"as that one. {ask} the day control to a day in P{asked}.")
+    # ... unless it is the period just before, compared with the selected one said too ("compare P2 to P1", "how did P2 go versus
+    # P1"): the route that carries the period before beside it answers it (parse_request; the reviewer's re-check of round 2)
+    refusal.previous_beside = (asked == before and bool(re.search(rf"\bp{number}\b|\b(?:this|current)\s+period\b", lower))
+                               and bool(re.search(r"\b(?:compar\w*|versus|vs\.?|against|than|to)\b", lower)))
+    return refusal
 
 
 # The measure's own words, by metric: its noun and unit, the "per <denominator>" of a kept ratio and the average a kept ratio is
@@ -2018,7 +2034,7 @@ SHIFT_COMPARE = r"\b(compare|compared|comparing|comparison|versus|vs|against|tha
 # "The last week" is the trailing week, not the week before: it keeps the selected window, as before.
 RELATIVE_WINDOWS = (("day", r"\byesterday\b"), ("week", r"\b((?<!the )last|previous|prior)\s+week\b"),
                     ("month", r"\b((?<!the )last|previous|prior)\s+month\b"),
-                    ("fiscal", r"\b((?<!the )last|previous|prior)\s+(accounting\s+)?period\b"))
+                    ("fiscal", r"\b((?<!the )last|previous|prior)\s+(accounting\s+|fiscal\s+|4-4-5\s+)?period\b"))   # "last fiscal period" (PR #186)
 # A comparison word anywhere makes the relative window its base. "From", "over" and "since" do only right before
 # it, as #99's speed-variance cue reads them ("what drove speed since last week"); elsewhere they leave it the window
 # asked about ("downtime from maintenance last week" is 7-11 Sep from Mon 14 Sep).
@@ -2244,6 +2260,10 @@ def parse_request(text, current, store=None):
             return False
     numbered = None if isinstance(refused, Standing) or not isinstance(text, str) else \
         numbered_period(read_shorthand(text.lower()), current.production_day, answers if days else None)
+    if numbered is not None and getattr(numbered, 'previous_beside', False) and request is not None \
+            and request.get('intent') in ('period_compare', 'period_review', 'period_waste', 'period_speed', 'period_pareto') \
+            and ((request.get('plan') or [{}])[0].get('arguments') or {}).get('window', {}).get('period') == 'fiscal':
+        numbered = None   # "compare P2 to P1": the selected period with the one before beside it, as on main
     if numbered is not None:
         # "downtime P1", "top operator reasons P9": a 4-4-5 period said by its number that is not the selected one, on every route
         # (the coordinator's review of PR #186, round 2, item 3: the hand route and the parser both answered P2); a Standing refusal

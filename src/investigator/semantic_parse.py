@@ -205,7 +205,7 @@ BARE_PREVIOUS = (r"\b(?:versus|vs\.?|compared?\s+(?:to|with)|comparing\s+(?:to|w
 RELATIVE_READ = r"(?:last|previous|prior)\s+(?:production\s+)?(?:week|month|(?:accounting\s+)?period)"
 # ... and "the last week", "the last month": the trailing week or month (agent.ROLLING_WINDOW), never moved to the window before, so a
 # rolling window the records do not keep, in the router's own words, with the window before offered (PR #186, round 2, item 4)
-ROLLING_LAST = r"\bthe\s+last\s+(?:production\s+)?(week|month|(?:accounting\s+|4-4-5\s+|fiscal\s+)?period)\b(?!\s+of\b)"
+ROLLING_LAST = r"\bthe\s+last\s+(?:production\s+)?(week|month|(?:accounting\s+|4-4-5\s+|fiscal\s+)?period)\b(?!\s+(?:of|in)\b)"
 # ... of which these are never the selected day, so a hand route that answers the selected day for them answers another window (round 5
 # of the coordinator's notes on #144): refused over it. A weekday is one when it is not the selected day's ("on Monday" on a Monday is
 # that day; "Mondays" asks a weekday profile, not a window).
@@ -450,7 +450,7 @@ def future_pattern(mdl=None):
         words = sorted(mdl.future, key=len, reverse=True) or ['(?!)']
         alternatives = [r'\s+'.join(re.escape(t) for t in w.split()) if w != '(?!)' else w for w in words]
         # ... and "next" said with a count ("next 2 weeks", "the next three months"): the same windows after the selected day
-        alternatives.append(rf"next\s+{_COUNT}\s+(?:production\s+)?(?:days|weeks|months|periods)")
+        alternatives.append(rf"next\s+{_COUNT}\s+(?:production\s+)?(?:days|weeks|months|periods|shifts)")
         _FUTURE[id(mdl)] = r"\b(?:(?:for|over|in|during|across|through)\s+)?(?:the\s+)?(?P<words>" + '|'.join(alternatives) + r")\b"
     return _FUTURE[id(mdl)]
 
@@ -558,6 +558,24 @@ def _bare_previous(reading, bare, text, context, store, mdl):
                   f"'{_before_words(grain)}'", _checked_offers(reading, texts, context, store, mdl))
 
 
+def _routes(question, context, store):
+    """True when the offline router answers `question` in the controls `context` was read in (_controls): a question a refusal offers
+    in its own text. Never inside a check of a question offered (False there: nothing is offered one level down)."""
+    if getattr(_OFFERING, 'text', None) or not store:
+        return False
+    controls = _controls(context, store)
+    if controls is None:
+        return False
+    _OFFERING.text = question
+    try:
+        agent.route(question, controls, store.production_days, store)
+        return True
+    except ValueError:
+        return False
+    finally:
+        _OFFERING.text = None
+
+
 def _relative_unmoved(reading, words, text, context, store, mdl):
     """Refuse a window the model reads ("last week") that the scope did not move to because a second window or a comparison is said
     beside it ("top maintenance reasons last week and this week", "how did last week compare"): never "'last week' is not a window the
@@ -645,7 +663,7 @@ def _read(reading, text, context, store, mdl):
     if dated != lower:
         lower = text = dated   # the helpers below read the question again: they read it without the year
     numbered = agent.numbered_period(lower, context.production_day)
-    if numbered is not None:
+    if numbered is not None and not getattr(numbered, 'previous_beside', False):   # "compare P2 to P1": parse_request decides
         reading.cues.add('unread window')   # "top operator reasons P1": never the selected period (item 3; parse_request refuses first)
         raise Refused(str(numbered))
     read_words = getattr(context, 'read', None) or {}
@@ -749,9 +767,11 @@ def _read(reading, text, context, store, mdl):
         before = re.sub(r"\s+", ' ', re.sub(r"\b(?:(?:in|for|during|over|across)\s+)?" + re.escape(said) + r"\b",
                                             ' last ' + ('period' if 'period' in rolling[1] else rolling[1]) + ' ',
                                             agent.correct_typos(text.lower()), count=1)).strip(' ?.!,')
-        raise Refused(f"A rolling window ('{said}') is not one the records keep: {WINDOWS_READ}. Ask '{before}' for the "
-                      f"{'Mon-Fri week' if rolling[1] == 'week' else 'calendar month' if rolling[1] == 'month' else '4-4-5 period'} "
-                      f"before the selected one")
+        text = f"A rolling window ('{said}') is not one the records keep: {WINDOWS_READ}"
+        if _routes(before, context, store):   # offered only when the router answers it
+            text += (f". Ask '{before}' for the {'Mon-Fri week' if rolling[1] == 'week' else 'calendar month' if rolling[1] == 'month' else '4-4-5 period'} "
+                     f"before the selected one")
+        raise Refused(text)
     unread = moved_span or re.search(UNREAD_SPAN, lower) or month_to or re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
         # "a year", "per year" or "annually" said as a rate of money or a loss ("what is trim costing us per year", "dollars a year from
@@ -2623,12 +2643,12 @@ def route(text, context, store, request, refused):
     store = store if store is not None else _default_store()
     reading = read(text, context, store)
     if reading.cues & {'top refused', 'future window'} and reading.refusal or 'rolling window' in reading.cues and reading.refusal \
-            and (refused is None and request is not None or refused is not None and not str(refused).startswith('A rolling window')):
+            and refused is not None and not str(refused).startswith('A rolling window'):
         # "top 0", "top 500": refused naming N over whatever the hand route answered or refused (the review of PR #186, items 4 and 5);
         # "next week", "next month": a window after the selected day, over any hand route or its refusal ("how many stops next week"
-        # was "asks for one stop"; round 2, item 5); "the last fiscal period", over any route that answered (the quantity routes read
-        # their own window words), and over any refusal but the router's own rolling one ("how many stops the last fiscal period" was
-        # "'last' asks for one stop")
+        # was "asks for one stop"; round 2, item 5); "the last fiscal period" over any refusal but the router's own rolling one ("how many
+        # stops the last fiscal period" was "'last' asks for one stop"); an answer stands only on a route that reads its own window
+        # words, the trend ("downtime trend over the last month"; the unread-window rule below refuses the others)
         raise ValueError(refusal_text(reading))
     if 'uncounted' in reading.cues:
         # "which shift had the most chops", "compare shifts on chops", "stacker boards on shift 1 versus shift 2": a count of what the

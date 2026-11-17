@@ -58,16 +58,17 @@
     "words": ["ytd", "y-t-d", "year to date", "this year to date", "the year to date", "this year", "so far this year", "this year so far", "the year so far"]}
   ],
   "shorthand": {
-   "about": "Window words said short, read as the words they shorten before any window is read, by the hand router and the parser alike (the coordinator's review of PR #186, round 2, item 5): 'last wk' is last week, 'in Sept' and 'Sep 2026' are September, 'in Aug' August, 'PTD' the period to date and 'Q-3' or '3Q' the third quarter, which are windows the model does not read and are refused.",
-   "words": {"wk": "week", "wks": "weeks", "mo": "month", "mos": "months", "jan": "january", "feb": "february", "mar": "march",
-             "apr": "april", "jun": "june", "jul": "july", "aug": "august", "sep": "september", "sept": "september", "oct": "october",
-             "nov": "november", "dec": "december", "ptd": "period to date",
-             "q-1": "q1", "q-2": "q2", "q-3": "q3", "q-4": "q4", "1q": "q1", "2q": "q2", "3q": "q3", "4q": "q4"}
+   "about": "Window words said short, read as the words they shorten before any window is read, by the hand router and the parser alike (the coordinator's review of PR #186, round 2, item 5): 'last wk' is last week, 'in Sept' and 'Sep 2026' are September, 'PTD' the period to date and 'Q-3' or '3Q' the third quarter, which are windows the model does not read and are refused. The other months said short ('months') are read only where a window stands, after a preposition, a comparison or a day's number ('in Aug', 'since 1 Jan') or before a year ('Dec 2025'): 'the dec in speed' and 'the current apr' are not months.",
+   "words": {"wk": "week", "wks": "weeks", "mo": "month", "mos": "months", "sep": "september", "sept": "september", "ptd": "period to date",
+             "q-1": "q1", "q-2": "q2", "q-3": "q3", "q-4": "q4", "1q": "q1", "2q": "q2", "3q": "q3", "4q": "q4"},
+   "months": {"jan": "january", "feb": "february", "mar": "march", "apr": "april", "jun": "june", "jul": "july", "aug": "august",
+              "oct": "october", "nov": "november", "dec": "december"}
   },
   "future": {
    "about": "Windows after the selected day, refused: a question is answered up to the selected day, never after it (the coordinator's review of PR #186, round 2, item 5). 'Next' said with a count of weeks, months, days or periods ('next 2 weeks') is one too.",
    "words": ["next week", "next production week", "next month", "next period", "next accounting period", "next 4-4-5 period", "next fiscal period",
-             "coming week", "coming month", "coming period", "upcoming week", "upcoming month", "upcoming period", "week after next", "month after next"]
+             "coming week", "coming weeks", "coming month", "coming months", "coming period", "upcoming week", "upcoming weeks", "upcoming month",
+             "upcoming months", "upcoming period", "week after next", "month after next", "day after next"]
   }
  },
  "dimensions": [

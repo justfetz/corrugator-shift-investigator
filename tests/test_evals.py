@@ -499,8 +499,8 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # + PR #186's first coordinator review, 14 (three of them the owner's review kept on 'What were the downtime reasons yesterday?'),
     # and the reviewer's check of that fix round, 4 + its second coordinator review, 33 (a month with its year, a top N up to 200 in full,
     # the selected period by its number, the words said short, the waste breakdown of a month named and two guards beside it) + the
-    # reviewer's check of that round, 14
-    assert len(routing) == 629 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # reviewer's check of that round, 14, and its re-check, 11
+    assert len(routing) == 640 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)
