@@ -8,17 +8,22 @@ hand-written SQL query over the record tables, so if the computation behind an e
 An example's plan has one of three shapes:
 
 - a query: one semantic query, with `beside` measures read over the same rows (stops and minutes per stop beside a reason's
-  minutes);
+  minutes); its rows may be chosen and ordered by another measure, `rank_by` (the stops on the worst running grades: each grade
+  leads with its stops, and the grades are the slowest by speed without stops);
 - `rank_together`: two queries whose rows are ranked together (speed loss: stop reasons and grades, in feet);
 - `lines`: one total per query (where the waste is: trim, shear, dry end, peel, core, each in its own unit);
 
 or it is a `refusal`: a question the records cannot answer, refused naming what is missing.
 
-A plan names its window by a relative window of the defaults block (`ytd`, `last_week`, ...), read on the page's day.
+A plan names its window by a relative window of the defaults block (`ytd`, `last_week`, ...), read on the page's day. Loaded
+with the store (`load(store=...)`: the tests, `evals/run.py` and the app at start), every filter value must be one the records
+hold, spelled as they hold it.
 
 The reading score (issue #187's baseline for the planner, #172): each example's question in the owner's words and five
 rewordings, asked of the offline router (`agent.route`: the scope the words name, then `agent.parse_request`) on the golden
-page, and scored a pass when the plan it reads is the example's. Reported by `evals/run.py`, never a gate.
+page, and scored a pass when the plan it reads is the example's. A wording asked in a window the model does not read yet (the
+year to date until PR #186) is read in a stand-in window: it is reported apart and never counted as a pass. Reported by
+`evals/run.py`, never a gate.
 """
 import json
 from pathlib import Path
@@ -32,6 +37,9 @@ REVIEWERS = ('owner', 'owner-pending')
 REWORDINGS = 5                                   # rewordings per example, beside the owner's own words
 QUERY_FIELDS = ('measure', 'group_by', 'filters', 'order', 'limit', 'shift')
 SHAPES = ('query', 'rank_together', 'lines', 'refusal')
+RANK_FIELDS = ('measure', 'order', 'limit')      # rank_by: the measure that picks and orders a query's rows, its order and how many
+STAND_IN = 'stand-in'                            # a wording asked in a window the model reads in a stand-in: never a pass
+OUTCOMES = ('pass', 'miss', STAND_IN)
 # The page the reading score asks on: the golden default (evals/run.py DEFAULT_DAY, shift 2 under the shift scope)
 SCORE_DAY, SCORE_SHIFT, SCORE_SCOPE = '2026-09-14', 2, 'shift'
 VALIDATION_DAY = '2026-09-14'    # a day to read relative windows on when an example is checked without a store
@@ -78,7 +86,26 @@ def queries(example, day, window=None, mdl=None):
     return out, read_as
 
 
-def _check_example(example, mdl, defaults, seen):
+def _ranking(example, query):
+    """The query that picks and orders a rank_by example's rows: the lead query's split, filters, shift and window, read in the
+    rank_by measure with its order and limit (the slowest five grades by speed without stops)."""
+    rank = example['plan']['rank_by']
+    return {**query, 'measure': rank['measure'], 'order': rank['order'], 'limit': rank['limit']}
+
+
+def _check_values(valid, store, mdl, where):
+    """Every filter value of a checked query is one the store holds, spelled as the store holds it: a misspelled value, or one the
+    records hold in another case, fails the load (the coordinator's review of PR #189, item 4)."""
+    for dim, value in valid.filters.items():
+        try:
+            held = semantic.resolve_value(dim, value, store, mdl)
+        except semantic.SemanticError as exc:
+            raise ExampleError(f'{where}: {exc}') from None
+        if held != value:
+            raise ExampleError(f'{where}: names {mdl.dimensions[dim]["label"].lower()} {value!r}, and the records hold it as {held!r}')
+
+
+def _check_example(example, mdl, defaults, seen, store=None):
     eid = example.get('id')
     where = f'example {eid}'
     if not eid or not re.fullmatch(r'[a-z0-9]+(-[a-z0-9]+)*', eid) or eid in seen:
@@ -108,7 +135,7 @@ def _check_example(example, mdl, defaults, seen):
             if name not in defaults['windows']:
                 raise ExampleError(f'{where}: the alternate {name} is not a relative window of the model')
         if kind == 'query':
-            unknown = set(plan) - {*QUERY_FIELDS, 'window'}
+            unknown = set(plan) - {*QUERY_FIELDS, 'window', 'rank_by'}
         else:
             unknown = set(plan) - {kind, 'window', 'shift', 'order', 'limit'}
         if unknown:
@@ -124,6 +151,24 @@ def _check_example(example, mdl, defaults, seen):
                 valid.append(semantic.validate(query, None, mdl))
             except semantic.SemanticError as exc:
                 raise ExampleError(f'{where}: {exc}') from None
+        ranked = None
+        if 'rank_by' in plan:
+            rank = plan['rank_by']
+            if not isinstance(rank, dict) or set(rank) != set(RANK_FIELDS):
+                raise ExampleError(f'{where}: rank_by names its ' + ', '.join(RANK_FIELDS))
+            if 'order' in plan or 'limit' in plan:
+                raise ExampleError(f'{where}: rank_by holds the order and the limit of the rows, so the plan names neither')
+            if not plan.get('group_by'):
+                raise ExampleError(f'{where}: rank_by ranks the rows of a split, and the plan names none')
+            if rank['order'] not in ('value', 'value_asc'):
+                raise ExampleError(f'{where}: rank_by orders by value, largest first (value) or smallest first (value_asc)')
+            try:
+                ranked = semantic.validate(_ranking(example, parts[0]), None, mdl)
+            except semantic.SemanticError as exc:
+                raise ExampleError(f'{where}: rank_by {rank["measure"]}: {exc}') from None
+        if store is not None:
+            for query in valid:
+                _check_values(query, store, mdl, where)
         if kind == 'rank_together' and len({mdl.measures[q.measure]['unit'] for q in valid}) != 1:
             raise ExampleError(f'{where}: rank_together ranks queries of one unit')
         if kind == 'lines' and any(q.group_by for q in valid):
@@ -133,7 +178,7 @@ def _check_example(example, mdl, defaults, seen):
                 semantic.validate({**parts[0], 'measure': name, 'order': 'dimension', 'limit': semantic.MAX_LIMIT}, None, mdl)
             except semantic.SemanticError as exc:
                 raise ExampleError(f'{where}: beside {name}: {exc}') from None
-        _check_rules(example, valid, defaults, where)
+        _check_rules(example, valid, defaults, where, limited=[ranked] if ranked else valid)
     rewordings = example.get('rewordings', [])
     if len(rewordings) != REWORDINGS:
         raise ExampleError(f'{where}: an example carries {REWORDINGS} rewordings beside the owner\'s words')
@@ -148,8 +193,9 @@ def _check_example(example, mdl, defaults, seen):
             raise ExampleError(f'{where}: the rewording names window {wording["window"]}, which is not a relative window of the model')
 
 
-def _check_rules(example, valid, defaults, where):
-    """The defaults an example cites hold in its plan: the build fails when the two drift apart."""
+def _check_rules(example, valid, defaults, where, limited=None):
+    """The defaults an example cites hold in its plan: the build fails when the two drift apart. `limited`: the queries whose limit
+    is the plan's (the rank_by query of a ranked example, whose lead query lists every row it ranks)."""
     rules = defaults['rules']
     plan = example['plan']
     for rid in example.get('rules', []):
@@ -158,7 +204,7 @@ def _check_rules(example, valid, defaults, where):
             raise ExampleError(f'{where}: cites {rid}, whose window is {applies["window"]}, but reads {plan["window"]}')
         if 'alternates' in applies and example.get('alternates') != applies['alternates']:
             raise ExampleError(f'{where}: cites {rid}, whose alternates are ' + ', '.join(applies['alternates']))
-        if 'limit' in applies and any(q.limit != applies['limit'] for q in valid):
+        if 'limit' in applies and any(q.limit != applies['limit'] for q in (limited or valid)):
             raise ExampleError(f'{where}: cites {rid}, which lists {applies["limit"]}')
         if 'dimension' in applies and (valid[0].group_by[:1] != [applies['dimension']] or valid[0].measure != applies['measure']
                                        or example.get('beside', []) != applies.get('beside', [])):
@@ -172,14 +218,15 @@ def _check_rules(example, valid, defaults, where):
             raise ExampleError(f'{where}: cites {rid}, which refuses for {applies["absent"]}')
 
 
-def load(path=None, mdl=None):
+def load(path=None, mdl=None, store=None):
     """The examples of `examples.json`, each checked against the semantic model: a plan naming a measure, dimension, window or
-    default the model lacks fails here, so it fails the build."""
+    default the model lacks fails here, so it fails the build. With the `store` (the tests, evals/run.py and the app at start),
+    each filter value is checked against the values the records hold too: a misspelled one fails the same way."""
     mdl = mdl or semantic.model()
     spec = json.loads(Path(path or EXAMPLES_PATH).read_text())
     seen = set()
     for example in spec['examples']:
-        _check_example(example, mdl, mdl.defaults, seen)
+        _check_example(example, mdl, mdl.defaults, seen, store)
         seen.add(example['id'])
     return spec['examples']
 
@@ -219,15 +266,34 @@ def run_example(example, store, day, window=None, mdl=None):
             return {'shape': kind, 'refused': str(exc), 'needs': concept['needs'], 'rows': []}
         raise ExampleError(f'example {example["id"]}: the semantic model answered a question it should refuse')
     parts, read_as = queries(example, day, window, mdl)
-    results = [semantic.run(q, store, mdl=mdl) for q in parts]
-    out = {'shape': kind, 'window': results[0]['window'], 'read_as': read_as, 'says': says, 'queries': [r['query'] for r in results]}
+    rank = example['plan'].get('rank_by') if kind == 'query' else None
+    if rank:
+        # the rows are the ranking's (the slowest grades, slowest first); each leads with the plan's own measure for that row
+        ranking = semantic.run(_ranking(example, parts[0]), store, mdl=mdl)
+        results = [semantic.run({**parts[0], 'order': 'dimension', 'limit': semantic.MAX_LIMIT}, store, mdl=mdl)]
+    else:
+        ranking, results = None, [semantic.run(q, store, mdl=mdl) for q in parts]
+    out = {'shape': kind, 'window': results[0]['window'], 'read_as': read_as, 'says': says,
+           'queries': [r['query'] for r in ([ranking] if ranking else []) + results]}
     if kind == 'query':
         query, result = parts[0], results[0]
         share = any((mdl.defaults['rules'][r].get('applies') or {}).get('share') for r in example.get('rules', []))
-        if query['group_by'] and query.get('limit') == semantic.DEFAULT_LIMIT and result['groups'] > len(result['rows']):
-            # a split that says no number lists every row (describe: "every row"): one the limit would cut is refused, never shown short
-            raise ExampleError(f'example {example["id"]}: {result["groups"]} rows, more than one request lists')
-        rows = [_row(r, query, share=share) for r in result['rows']]
+        if rank:
+            if result['groups'] > len(result['rows']):
+                raise ExampleError(f'example {example["id"]}: {result["groups"]} rows, more than one request lists')
+            held = {_key(query, r): r for r in result['rows']}
+            empty = 0 if mdl.measures[query['measure']]['agg'] in semantic.ADDITIVE else None
+            rows = []
+            for r in ranking['rows']:
+                hit = held.get(_key(query, r))
+                row = _row(hit, query) if hit else {'key': {dim: r.get(dim) for dim in query['group_by']}, 'label': r['label'], 'value': empty}
+                row['rank'] = {'measure': rank['measure'], 'value': r['value']}
+                rows.append(row)
+        else:
+            if query['group_by'] and query.get('limit') == semantic.DEFAULT_LIMIT and result['groups'] > len(result['rows']):
+                # a split that says no number lists every row (describe: "every row"): one the limit would cut is refused, never shown short
+                raise ExampleError(f'example {example["id"]}: {result["groups"]} rows, more than one request lists')
+            rows = [_row(r, query, share=share) for r in result['rows']]
         for name in example.get('beside', []):
             beside = semantic.run({**query, 'measure': name, 'order': 'dimension', 'limit': semantic.MAX_LIMIT}, store, mdl=mdl)
             if beside['groups'] > len(beside['rows']):
@@ -235,8 +301,8 @@ def run_example(example, store, day, window=None, mdl=None):
             values = {_key(query, r): r['value'] for r in beside['rows']}
             # a slice the beside measure recorded nothing for is a recorded zero for a sum or a count, and no value for a ratio
             empty = 0 if mdl.measures[name]['agg'] in semantic.ADDITIVE else None
-            for row, raw in zip(rows, result['rows']):
-                row.setdefault('beside', {})[name] = values.get(_key(query, raw), empty)
+            for row in rows:
+                row.setdefault('beside', {})[name] = values.get(_key(query, row['key']), empty)
         if not query['group_by']:
             rows = [{'key': {}, 'label': 'Total', 'value': result['value'],
                      **{f: result[f] for f in ('numerator', 'denominator', 'band') if result.get(f) is not None}}]
@@ -261,14 +327,20 @@ def run_example(example, store, day, window=None, mdl=None):
 
 # ------------------------------------------------------------------ the reading in words
 
-def describe(query, mdl=None):
-    """A semantic query in words: `Downtime (min) · stop kind Maintenance · by stop reason · largest first · top 5 · all shifts`."""
+def describe(query, mdl=None, rank=None):
+    """A semantic query in words: `Downtime (min) · stop kind Maintenance · by stop reason · largest first · top 5 · all shifts`;
+    with `rank` (an example's rank_by), its rows are the ranking's: `stops (stops) · by board grade · the 5 with the lowest speed
+    without stops (ft/min), lowest first · all shifts`."""
     mdl = mdl or semantic.model()
     m = mdl.measures[query['measure']]
     parts = [f'{m["label"].lower()} ({m["unit"]})']
     for dim, value in (query.get('filters') or {}).items():
         parts.append(f'{mdl.dimensions[dim]["label"].lower()} {value}')
-    if query.get('group_by'):
+    if query.get('group_by') and rank:
+        parts.append('by ' + ' and '.join(semantic._noun(mdl, d) for d in query['group_by']))
+        by, way = mdl.measures[rank['measure']], 'lowest' if rank['order'] == 'value_asc' else 'highest'
+        parts.append(f'the {rank["limit"]} with the {way} {by["label"].lower()} ({by["unit"]}), {way} first')
+    elif query.get('group_by'):
         parts.append('by ' + ' and '.join(semantic._noun(mdl, d) for d in query['group_by']))
         order = query.get('order') or 'value'
         parts.append({'value': 'largest first', 'value_asc': 'smallest first', 'dimension': 'in order'}[order])
@@ -290,7 +362,7 @@ def describe_example(example, mdl=None):
     if spec['period'] not in semantic.WINDOW_PERIODS:
         window += f' (read as {mdl.defaults["windows"][spec["interim"]]["label"].lower()} until the model reads the {window}: PR #186)'
     if kind == 'query':
-        text = describe(parts[0], mdl)
+        text = describe(parts[0], mdl, rank=example['plan'].get('rank_by'))
         if example.get('beside'):
             text += ' · beside: ' + ', '.join(f'{mdl.measures[b]["label"].lower()} ({mdl.measures[b]["unit"]})' for b in example['beside'])
     elif kind == 'rank_together':
@@ -306,11 +378,15 @@ def describe_example(example, mdl=None):
 
 def _normal(query, store, mdl):
     """A query as the model reads it (`semantic.validate` with the store: names and values resolved, defaults filled), with its
-    window as the dates it covers, so two readings of one window compare equal whatever day anchors them."""
+    window as the dates it covers, so two readings of one window compare equal whatever day anchors them. With no split there is
+    one row, so its order and its limit say nothing and are left out."""
     q = semantic.validate(query, store, mdl)
     period, _, start, end = semantic.parse_window(q.window)
     args = q.to_arguments()
     args['window'] = (period, start.isoformat(), end.isoformat())
+    if not q.group_by:
+        args.pop('order', None)
+        args.pop('limit', None)
     return args
 
 
@@ -324,29 +400,37 @@ def _read_as(request):
 
 
 def score_wording(example, text, window, store, day=SCORE_DAY, shift=SCORE_SHIFT, scope=SCORE_SCOPE, mdl=None):
-    """One wording read by the offline router on the page (`day`, `shift`, `scope`): {'outcome': 'pass' or 'miss', 'read_as'}."""
+    """One wording read by the offline router on the page (`day`, `shift`, `scope`): {'outcome': 'pass', 'miss' or 'stand-in',
+    'read_as'}. `window` is the relative window the wording names, or None for the example's own.
+
+    A wording asked in a window the model does not read yet (the year to date until PR #186) can only be compared with the
+    example's plan read in its stand-in window, which is another question (the stand-in ranks reasons otherwise): it is a
+    stand-in, reported apart and never a pass, whatever the router makes of it. A refusal example passes only on its own rule's
+    refusal (the absent concept's words), never on another refusal that happens to name what is missing."""
     from .agent import Context, route
     mdl = mdl or semantic.model()
+    kind = shape(example)
     context = Context(day, shift, scope=scope, period='day')
     try:
         request, _ = route(text, context, store.production_days, store)
+        refused, read_as = None, _read_as(request)
     except ValueError as exc:
-        message = str(exc)
-        if shape(example) == 'refusal':
-            concept = next(c for c in mdl.absent.values() if c['name'] == example['refusal']['absent'])
-            if concept['needs'].rstrip('s') in message.lower():
-                return {'outcome': 'pass', 'read_as': 'refused: ' + message[:160]}
-        return {'outcome': 'miss', 'read_as': 'refused: ' + message[:160]}
-    read_as = _read_as(request)
-    if shape(example) == 'refusal':
+        request, refused = None, str(exc)
+        read_as = 'refused: ' + refused[:160]
+    if kind == 'refusal':
+        rule = next(c for c in mdl.absent.values() if c['name'] == example['refusal']['absent'])
+        return {'outcome': 'pass' if refused is not None and rule['refusal'] in refused else 'miss', 'read_as': read_as}
+    expected, read_in = queries(example, day, window, mdl)
+    if read_in != (window or example['plan']['window']):
+        return {'outcome': STAND_IN, 'read_as': read_as}
+    if refused is not None:
         return {'outcome': 'miss', 'read_as': read_as}
-    if shape(example) != 'query':
-        # the offline router reads one semantic query; this example puts several together
+    if kind != 'query' or example['plan'].get('rank_by'):
+        # the offline router reads one semantic query; this example puts several together (or ranks its rows by another measure)
         return {'outcome': 'miss', 'read_as': read_as}
     plan = request.get('plan') or []
     if request.get('intent') != 'semantic' or len(plan) != 1 or plan[0]['tool'] != semantic.TOOL:
         return {'outcome': 'miss', 'read_as': read_as}
-    expected, _ = queries(example, day, window, mdl)
     try:
         same = _normal(plan[0]['arguments'], store, mdl) == _normal(expected[0], store, mdl)
     except semantic.SemanticError as exc:
@@ -356,26 +440,28 @@ def score_wording(example, text, window, store, day=SCORE_DAY, shift=SCORE_SHIFT
 
 def reading_score(store, day=SCORE_DAY, shift=SCORE_SHIFT, scope=SCORE_SCOPE, mdl=None, examples=None):
     """How many of the examples' wordings the offline router reads as the example's plan: the owner's words and each rewording,
-    asked on the golden page. {'read', 'of', 'owner_read', 'owner_of', 'interim', 'rows': one per wording}. Reported, never a gate."""
+    asked on the golden page. {'read', 'of', 'owner_read', 'owner_of', 'examples', 'stand_in', 'page', 'rows': one per wording,
+    each with its outcome}. A wording asked in a stand-in window is counted in `of` and in `stand_in`, never in `read`. Reported,
+    never a gate."""
     mdl = mdl or semantic.model()
     rows = []
-    for example in examples or load(mdl=mdl):
+    for example in examples or load(mdl=mdl, store=store):
         wordings = [{'text': example['question'], 'reviewed_by': 'owner', 'owner': True}] + list(example['rewordings'])
         for wording in wordings:
             window = wording.get('window')
-            _, read_in = queries(example, day, window, mdl) if shape(example) != 'refusal' else ([], None)
             result = score_wording(example, wording['text'], window, store, day, shift, scope, mdl)
             asked = window or (example['plan']['window'] if shape(example) != 'refusal' else None)
-            rows.append({'example': example['id'], 'text': wording['text'], 'owner': bool(wording.get('owner')),
-                         'window': asked, 'interim': bool(asked and read_in and read_in != asked), **result})
+            rows.append({'example': example['id'], 'text': wording['text'], 'owner': bool(wording.get('owner')), 'window': asked, **result})
     owner = [r for r in rows if r['owner']]
     return {'read': sum(r['outcome'] == 'pass' for r in rows), 'of': len(rows),
             'owner_read': sum(r['outcome'] == 'pass' for r in owner), 'owner_of': len(owner),
-            'examples': len({r['example'] for r in rows}), 'interim': sum(r['interim'] for r in rows),
+            'examples': len({r['example'] for r in rows}), 'stand_in': sum(r['outcome'] == STAND_IN for r in rows),
             'page': {'day': day, 'shift': shift, 'scope': scope}, 'rows': rows}
 
 
 def score_line(score):
-    """`verified examples read correctly: X of N (the owner's own words: a of b)`: the line evals/run.py prints."""
+    """`verified examples read correctly: X of N (the owner's own words: a of b); s asked in a stand-in window, never counted as a
+    pass`: the line evals/run.py prints."""
     return (f'verified examples read correctly: {score["read"]} of {score["of"]} wordings of {score["examples"]} examples '
-            f'(the owner\'s own words: {score["owner_read"]} of {score["owner_of"]}); reported, not a gate (issue #187)')
+            f'(the owner\'s own words: {score["owner_read"]} of {score["owner_of"]}); {score.get("stand_in", 0)} asked in a stand-in '
+            'window, never counted as a pass; reported, not a gate (issue #187)')

@@ -1262,22 +1262,28 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(eels['judge-detail'].hidden,false);
  const nrows=eels['judge-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent));
  assert.deepEqual(nrows,[['a@anthropic:1','1','1','0','1','1','prescribes_nothing: It tells the crew what to compare.'],['b@anthropic:1','1','1','1','—','0','unavailable_not_zero: judge error: bad JSON · comparisons_consistent: 467.45 is below the 500.00 target']]);
- // issue #187: with no reading score on the newest run the page says how to write one; with one, the line and every wording missed
+ // issue #187: with no reading score on the newest run the page says how to write one; with one, the line and every wording missed,
+ // and apart, every wording asked in a stand-in window (the coordinator's review of 91e8b33, item 1: never counted as a pass)
  assert.equal(eels['reading-summary'].textContent,'No reading score is tracked with the newest run: python3 evals/run.py --track writes it.');
- assert.equal(eels['reading-detail'].hidden,true);
- const reading={read:1,of:3,owner_read:0,owner_of:1,examples:1,interim:2,page:{day:'2026-09-14',shift:2,scope:'shift'},
-  misses:[{example:'top-maintenance-downtimes',text:'What are our top maintenance downtimes?',owner:true,window:'ytd',read_as:'downtime answer (the daily tools)'},
-          {example:'top-maintenance-downtimes',text:'top maintenance downtime reasons this year',owner:false,window:'ytd',read_as:"refused: 'this year' is not a window"}]};
+ assert.equal(eels['reading-detail'].hidden,true); assert.equal(eels['stand-in-detail'].hidden,true);
+ const reading={read:1,of:4,owner_read:0,owner_of:1,examples:1,stand_in:2,page:{day:'2026-09-14',shift:2,scope:'shift'},
+  misses:[{example:'top-maintenance-downtimes',text:'What are our top maintenance downtimes?',owner:true,window:'last_week',read_as:'downtime answer (the daily tools)'}],
+  stand_ins:[{example:'top-maintenance-downtimes',text:'top maintenance downtime reasons this year',owner:false,window:'ytd',read_as:"refused: 'this year' is not a window"},
+             {example:'top-maintenance-downtimes',text:'top 5 maintenance downtime reasons by minutes year to date',owner:false,window:'ytd',read_as:'semantic: downtime (min)'}]};
  const rctx={document:{getElementById:id=>{assert.ok(eels[id],`Unknown evals control ${id}`);return eels[id];},createElement:tag=>new El(tag),createElementNS:(_,tag)=>new El(tag)},
   fetch:async path=>path==='/evals.json'?{ok:true,status:200,json:async()=>({...board,reading})}:{ok:true,status:200,json:async()=>({token:'tok',public:true})},
   window:{innerWidth:1200,location:{search:''},history:{replaceState(){}}},console,URLSearchParams};
  vm.createContext(rctx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),rctx);vm.runInContext(esrc,rctx);await vm.runInContext('ready',rctx);
- assert.equal(eels['reading-summary'].textContent,'Verified examples read correctly: 1 of 3 wordings of 1 examples (the owner’s own words: 0 of 1), asked on 2026-09-14 with the page on shift 2 · 2 expected in an interim window, the 4-4-5 period, until the model reads the year to date (PR #186)');
+ assert.equal(eels['reading-summary'].textContent,'Verified examples read correctly: 1 of 4 wordings of 1 examples (the owner’s own words: 0 of 1), asked on 2026-09-14 with the page on shift 2 · 2 asked in a stand-in window, never counted as a pass: the 4-4-5 period stands in for the year to date until the model reads it (PR #186)');
  assert.equal(eels['reading-detail'].hidden,false);
- assert.equal(eels['reading-rows-title'].textContent,'Wordings read another way (2)');
+ assert.equal(eels['reading-rows-title'].textContent,'Wordings read another way (1)');
  assert.deepEqual(eels['reading-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent)),
-  [['top-maintenance-downtimes','Owner: What are our top maintenance downtimes?','ytd','downtime answer (the daily tools)'],
-   ['top-maintenance-downtimes','top maintenance downtime reasons this year','ytd',"refused: 'this year' is not a window"]]);
+  [['top-maintenance-downtimes','Owner: What are our top maintenance downtimes?','last_week','downtime answer (the daily tools)']]);
+ assert.equal(eels['stand-in-detail'].hidden,false);
+ assert.equal(eels['stand-in-rows-title'].textContent,'Wordings asked in a stand-in window, never a pass (2)');
+ assert.deepEqual(eels['stand-in-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent)),
+  [['top-maintenance-downtimes','top maintenance downtime reasons this year','ytd',"refused: 'this year' is not a window"],
+   ['top-maintenance-downtimes','top 5 maintenance downtime reasons by minutes year to date','ytd','semantic: downtime (min)']]);
  console.log('UI issue-25 checks passed: grading page lists, filters, refuses a bad grade without a reason, saves one with the token, never fetches the judge; /evals draws the judge table and agreement, and the verified examples\' reading score.');
 })().catch(error=>{console.error(error);process.exit(1);});
 

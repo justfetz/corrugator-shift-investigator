@@ -1090,7 +1090,9 @@ class RecordStore:
         """Paper consumed in one window, from the wet-end (paper run) records: lineal feet and
         MSF per board grade and web width, paper runs and feet per run, the previous window of
         the same kind alongside. MSF is the paper footprint, lineal feet x web width, the same
-        area the board records carry; the records hold no basis weight, so there are no tons.
+        area the board records carry, so this answer is area: the board recipes give each paper
+        grade its basis weight (the semantic model weighs peel and core by it, issue #187), and
+        tons of paper and their cost wait on pricing paper by weight (issue #181).
 
         All shifts: whole paper runs, each on the production day its first setup started. One
         shift: the setups that shift ran on each run, so the feet are the setup feet of that
@@ -1149,7 +1151,7 @@ class RecordStore:
                               delta_lineal_ft=round(total_feet - prev_feet, 1) if prev_feet is not None else None,
                               delta_msf=round(total_msf - prev_msf, 1) if prev_msf is not None else None,
                               attribution_note=attribution,
-                              msf_note="MSF is the paper footprint, lineal feet times web width in thousands of square feet; the records carry no basis weight, so tons and cost are not computed.")
+                              msf_note="MSF is the paper footprint, lineal feet times web width in thousands of square feet: this answer is area. The board recipes give each paper grade its basis weight, and peel and core are read by weight from it; tons of paper and their cost wait on pricing paper by weight.")
 
     def get_overrun(self, window, shift=None):
         """Over/under-run by knife: actual cuts against nominal cuts for every

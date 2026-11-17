@@ -641,7 +641,8 @@ def test_rollstock_is_the_wet_end_records_by_grade_and_width(store, data):
     setups = [s for s in between(data["dry_end_setups"], date(2026, 9, 14), date(2026, 9, 18)) if s.shift_number == 2]
     assert week["paper_runs"] == len({s.wet_end_id for s in setups})
     assert week["total_lineal_ft"] == pytest.approx(sum(s.lineal_ft for s in setups), abs=0.06)
-    assert "shift 2" in week["attribution_note"] and "no basis weight" in week["msf_note"]
+    # the note says the answer is area, never that there is no basis weight: the board recipes give each paper grade one (issue #187)
+    assert "shift 2" in week["attribution_note"] and "this answer is area" in week["msf_note"] and "no basis weight" not in week["msf_note"]
     with pytest.raises(ValueError, match="Shift must be"):
         store.get_rollstock({"period": "week", "anchor": "2026-09-14"}, shift=4)
 

@@ -472,6 +472,19 @@ def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
     assert outcome == 'pass' and ms > 250, (failures, note, ms)
 
 
+@pytest.mark.parametrize('case_id', ['examples-customer-credits-for-bond-and-warp-refused-naming-shipments',
+                                     'examples-shear-percent-by-machine-is-the-one-corrugator'])
+def test_a_known_defect_xfails_whether_it_answers_or_refuses(case_id):
+    """The coordinator's review of 91e8b33, item 3: the two bugs PR #189 found are golden cases marked known_defect for #172. One
+    answers where it should refuse, the other refuses where it should answer; either way the runner shows it as xfail with its
+    defect, never a failure of the gate, and the same case without the marker fails."""
+    case = next(c for c in CASES if c['id'] == case_id)
+    outcome, failures, note, _ = golden.run_case(case)
+    assert outcome == 'xfail' and failures and note.startswith('known defect: Issue #172'), (outcome, failures, note)
+    unmarked = {k: v for k, v in copy.deepcopy(case).items() if k != 'known_defect'}
+    assert golden.run_case(unmarked)[0] == 'fail'
+
+
 def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it():
     """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
     a case whose question lands elsewhere, and every offline question is also answered over its URL."""
@@ -485,8 +498,9 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # + the review of 7b46463's 5 + its probe's 4 + the reviewer's check of its fix, 1 + the review of 97b81f4's 9 + its probe's 1
     # + the reviewer's check of its fix, 2 + the review of 2c28fd3's 2 + the reviewer's check of its fix, 1
     # + 7 issue #164 money ledger cases + 1 asked by question in PR #168's fix round + 11 issue #177 All-day cases + 9 issue #177
-    # named-shift-list cases + 7 issue #187 questions the verified examples' measures answer
-    assert len(routing) == 546 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # named-shift-list cases + 7 issue #187 questions the verified examples' measures answer + its first fix round's 2 (the paper consumed
+    # in area, and shear by machine, a known defect for #172)
+    assert len(routing) == 548 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

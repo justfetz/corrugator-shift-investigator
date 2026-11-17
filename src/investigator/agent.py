@@ -596,7 +596,7 @@ NOT_COUNTED = ((r"\b(grade|flute) changes?\b", "The records do not count grade o
                (r"\borders?\b", "The records do not count distinct orders: an order's lines repeat when it continues across setups and "
                                  "shifts ('how many order changes this week' counts the setups an order change started)."),
                (r"\bcustomers?\b", "The records do not count customers: a customer's lines repeat across setups and shifts."),
-               (r"\b(tons?|tonnes?|pounds?|lbs?|weight)\b", "The records hold no weights: no basis weight is recorded."),
+               (r"\b(tons?|tonnes?|pounds?|lbs?|weight)\b", "Tons and pounds are not counted here: the board recipes give each paper grade its basis weight, and peel and core are read by weight ('peel and core % this week'); paper by weight and its cost wait on issue #181."),
                (r"\b(pallets?|loads?|shipments?|shipped|trucks?|units?)\b", "The records hold no shipping."),
                (r"\b(hours?|hrs?)\b", HOURS_TEXT))
 QUANTITY_HELP = ("Offline mode answers one quantity at a time: how many setups, order changes, paper changes, stops or sheets; "

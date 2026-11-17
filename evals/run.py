@@ -2235,10 +2235,10 @@ def _run_case(case, provider, live, record, scratch):
         want = expect.get('raises')
         if want and re.search(want, str(exc), re.I):
             slow = latency_failures(expect, provider, ms) + url_failures(case, expect, turns, provider)
-            return ('fail' if slow else 'pass'), slow, f'refused: {str(exc)[:60]}', ms, results
-        return 'fail', [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], '', ms, results
+            return known_defect(case, slow, f'refused: {str(exc)[:60]}', ms, results)
+        return known_defect(case, [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], '', ms, results)
     if expect.get('raises'):
-        return 'fail', [f'did not raise; status {results[-1]["status"]}'], '', ms, results
+        return known_defect(case, [f'did not raise; status {results[-1]["status"]}'], '', ms, results)
 
     failures = latency_failures(expect, provider, ms)
     failures.extend(score(case, expect, results, analysis, allowed, mode))
@@ -2267,6 +2267,12 @@ def _run_case(case, provider, live, record, scratch):
             note += f'; URL {URL_MS[case["id"]]:.0f} ms'
     if warnings:
         note += '; ' + '; '.join(sorted(warnings))
+    return known_defect(case, failures, note, ms, results)
+
+
+def known_defect(case, failures, note, ms, results):
+    """The case's outcome: a case marked known_defect that fails is an xfail with its defect, whether it answered where it should
+    refuse, refused where it should answer or answered wrong; one that passes says its marker is stale."""
     if failures and case.get('known_defect'):
         return 'xfail', failures, 'known defect: ' + case['known_defect'], ms, results
     if not failures and case.get('known_defect'):
@@ -2633,12 +2639,19 @@ def reading_score():
 
 
 def print_reading(score):
-    """The score's line, then every wording it missed with what the offline router read it as."""
+    """The score's line, then every wording it missed with what the offline router read it as, then, apart, every wording asked in
+    a stand-in window (the year to date until PR #186), which is never counted as a pass."""
     print(verified.score_line(score))
     for row in score['rows']:
-        if row['outcome'] != 'pass':
+        if row['outcome'] == 'miss':
             said = "the owner's words" if row['owner'] else 'rewording'
             print(f'  - {row["example"]} ({said}): {row["text"]!r} read as {row["read_as"]}')
+    stand_ins = [row for row in score['rows'] if row['outcome'] == verified.STAND_IN]
+    if stand_ins:
+        print('  stand-in window, reported apart (never a pass):')
+    for row in stand_ins:
+        said = "the owner's words" if row['owner'] else 'rewording'
+        print(f'  - {row["example"]} ({said}, {row["window"]}): {row["text"]!r} read as {row["read_as"]}')
 
 
 def offline_latency(rows):

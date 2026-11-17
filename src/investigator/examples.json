@@ -213,7 +213,7 @@
     "top_n"
    ],
    "reviewed_by": "owner-pending",
-   "notes": "The best of the two readings of 'best and worst running grades'. Beside each grade: its baseline, the footage recoverable (targets.json's speed gap: each of the grade's paper runs that ran under the baseline, the feet it would have made at the baseline less the feet it made, summed) and that gap in ft/min over all the grade's running minutes. A grade that ran faster than its baseline on average can still have runs under it, so its gap is never negative.",
+   "notes": "The best of the two readings of 'best and worst running grades'. Beside each grade: its baseline, the footage recoverable (targets.json's speed gap: each of the grade's paper runs that ran under the baseline, the feet it would have made at the baseline less the feet it made, summed) and that footage in ft/min over all the grade's running minutes, the shortfall on runs under baseline. A grade that ran faster than its baseline on average can still have runs under it, so its shortfall is never negative, and it is not the baseline less the grade's speed: runs over the baseline offset none of it.",
    "rewordings": [
     {
      "text": "best running grades this year",
@@ -308,18 +308,20 @@
    "question": "What are the stops on the worst running grades?",
    "definition": "Per grade: stops, minutes down, minutes per stop, and downtime % of that grade's time on the machine",
    "plan": {
-    "measure": "speed_run_fpm",
+    "measure": "stops",
     "group_by": [
      "grade"
     ],
     "filters": {},
-    "order": "value_asc",
-    "limit": 5,
     "shift": null,
+    "rank_by": {
+     "measure": "speed_run_fpm",
+     "order": "value_asc",
+     "limit": 5
+    },
     "window": "ytd"
    },
    "beside": [
-    "stops",
     "downtime_minutes",
     "minutes_per_stop",
     "downtime_clock_pct"
@@ -334,7 +336,7 @@
     "top_n"
    ],
    "reviewed_by": "owner-pending",
-   "notes": "The worst running grades (slowest first, as in worst-running-grades), each with its stops beside: a grade's time on the machine is its setups' own clock.",
+   "notes": "The question names stops, so each grade leads with its stops, then its minutes down, its minutes per stop and its downtime as a percent of its own time on the machine (its setups' clock); the grades are the worst running five by speed without stops, slowest first, as in worst-running-grades (rank_by), each with the speed that ranked it.",
    "rewordings": [
     {
      "text": "stops on the worst running grades this year",

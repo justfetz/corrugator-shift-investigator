@@ -141,19 +141,23 @@ function renderJudge(isPublic){
 }
 
 // ---- The verified examples' reading score (issue #187): how many of their wordings the offline router reads as the example's
-// plan, from the newest tracked run, and each wording it read another way. Reported, never a gate.
-function renderReading(){
- const r=board.reading;
- if(!r){$('reading-summary').textContent='No reading score is tracked with the newest run: python3 evals/run.py --track writes it.';$('reading-detail').hidden=true;return;}
- const page=r.page?`, asked on ${r.page.day}${r.page.shift?' with the page on shift '+r.page.shift:''}`:'';
- $('reading-summary').textContent=`Verified examples read correctly: ${r.read} of ${r.of} wordings of ${r.examples} examples (the owner’s own words: ${r.owner_read} of ${r.owner_of})${page}`
-  +(r.interim?` · ${r.interim} expected in an interim window, the 4-4-5 period, until the model reads the year to date (PR #186)`:'');
- const misses=r.misses||[]; $('reading-detail').hidden=!misses.length;
- $('reading-rows-title').textContent=`Wordings read another way (${misses.length})`;
+// plan, from the newest tracked run, each wording it read another way, and apart, each wording asked in a stand-in window (the
+// year to date until PR #186), which is never counted as a pass. Reported, never a gate.
+function readingTable(id,rows){
  const head=node('thead'), hr=node('tr'); for(const label of ['Example','Wording','Window','Read as']){const th=node('th',label);th.scope='col';hr.append(th);} head.append(hr);
  const body=node('tbody');
- for(const m of misses){const tr=node('tr'); tr.append(node('td',m.example),node('td',(m.owner?'Owner: ':'')+m.text),node('td',m.window||'—'),node('td',m.read_as)); body.append(tr);}
- $('reading-rows').replaceChildren(head,body);
+ for(const m of rows){const tr=node('tr'); tr.append(node('td',m.example),node('td',(m.owner?'Owner: ':'')+m.text),node('td',m.window||'—'),node('td',m.read_as)); body.append(tr);}
+ $(id).replaceChildren(head,body);
+}
+function renderReading(){
+ const r=board.reading;
+ if(!r){$('reading-summary').textContent='No reading score is tracked with the newest run: python3 evals/run.py --track writes it.';$('reading-detail').hidden=true;$('stand-in-detail').hidden=true;return;}
+ const page=r.page?`, asked on ${r.page.day}${r.page.shift?' with the page on shift '+r.page.shift:''}`:'';
+ $('reading-summary').textContent=`Verified examples read correctly: ${r.read} of ${r.of} wordings of ${r.examples} examples (the owner’s own words: ${r.owner_read} of ${r.owner_of})${page}`
+  +(r.stand_in?` · ${r.stand_in} asked in a stand-in window, never counted as a pass: the 4-4-5 period stands in for the year to date until the model reads it (PR #186)`:'');
+ const misses=r.misses||[], standIns=r.stand_ins||[];
+ $('reading-detail').hidden=!misses.length; $('reading-rows-title').textContent=`Wordings read another way (${misses.length})`; readingTable('reading-rows',misses);
+ $('stand-in-detail').hidden=!standIns.length; $('stand-in-rows-title').textContent=`Wordings asked in a stand-in window, never a pass (${standIns.length})`; readingTable('stand-in-rows',standIns);
 }
 
 // ---- Cases: one disclosure per case. Opening it runs the case here and draws expected beside actual.

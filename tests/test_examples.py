@@ -17,7 +17,7 @@ from investigator import examples, semantic, targets
 from investigator.record_store import SPEED_MIN_RUN_MINUTES, default_store, fiscal_bounds
 
 ANCHORS = ('2026-09-14', '2025-10-15')
-EXAMPLES = examples.load()
+EXAMPLES = examples.load(store=default_store())   # with the store: every filter value is one the records hold
 BY_ID = {e['id']: e for e in EXAMPLES}
 CASES = [(e['id'], day, window) for e in EXAMPLES if examples.shape(e) != 'refusal'
          for day in ANCHORS for window in [e['plan']['window'], *e.get('alternates', [])]]
@@ -151,15 +151,17 @@ def worst_running_grades(store, a, b):
 
 
 def stops_on_worst_running_grades(store, a, b):
+    # the five slowest grades by speed without stops (as worst-running-grades ranks them), each led by its stops (the question names
+    # stops: exact over summary), then its minutes down, minutes per stop and downtime % of its own setup clock; its speed comes last
     rows = q(store, """WITH g AS (SELECT quality_id, sum(lineal_ft) / (sum(seconds - stop_seconds) / 60) AS fpm, sum(seconds) / 60 AS clock
                                   FROM setups WHERE production_date BETWEEN ? AND ? GROUP BY quality_id),
                        d AS (SELECT s.quality_id, count(*) AS stops, sum(st.seconds) / 60 AS minutes FROM stops st JOIN setups s ON s.setup_id = st.setup_id
                              WHERE st.production_date BETWEEN ? AND ? GROUP BY s.quality_id)
                        SELECT g.quality_id, g.fpm, g.clock, coalesce(d.stops, 0) AS stops, coalesce(d.minutes, 0) AS minutes
                        FROM g LEFT JOIN d ON d.quality_id = g.quality_id ORDER BY g.fpm, g.quality_id LIMIT 5""", [a, b, a, b])
-    return [((r['quality_id'],), r['fpm'], {'stops': r['stops'], 'downtime_minutes': r['minutes'],
-                                           'minutes_per_stop': r['minutes'] / r['stops'] if r['stops'] else None,
-                                           'downtime_clock_pct': r['minutes'] / r['clock'] * 100}) for r in rows]
+    return [((r['quality_id'],), r['stops'], {'downtime_minutes': r['minutes'],
+                                             'minutes_per_stop': r['minutes'] / r['stops'] if r['stops'] else None,
+                                             'downtime_clock_pct': r['minutes'] / r['clock'] * 100, 'speed_run_fpm': r['fpm']}) for r in rows]
 
 
 def where_is_the_waste(store, a, b):
@@ -235,6 +237,15 @@ def _key(row, example):
     return tuple(row['key'].values())
 
 
+def _field(row, field):
+    """A row's other field: a measure beside it, the measure that ranked it (`rank`), or a field of its own (a band, a share)."""
+    if field in row.get('beside', {}):
+        return row['beside'][field]
+    if (row.get('rank') or {}).get('measure') == field:
+        return row['rank']['value']
+    return row.get(field)
+
+
 @pytest.mark.parametrize('eid, day, window', CASES, ids=[f'{e}@{d}@{w}' for e, d, w in CASES])
 def test_example_equals_its_oracle(store, eid, day, window):
     example = BY_ID[eid]
@@ -247,7 +258,7 @@ def test_example_equals_its_oracle(store, eid, day, window):
     for row, (key, value, other) in zip(got['rows'], want):
         assert row['value'] == pytest.approx(value, abs=0.01), (key, 'value')
         for field, expected in other.items():
-            actual = row.get('beside', {}).get(field, row.get(field))
+            actual = _field(row, field)
             if expected is None or isinstance(expected, str):
                 assert actual == expected, (key, field)
             else:
@@ -266,6 +277,47 @@ def test_the_by_machine_example_says_the_records_hold_one_corrugator(store):
     for word in ('machine', 'corrugator'):
         with pytest.raises(semantic.SemanticError, match='one corrugator'):
             semantic.validate({'measure': 'shear_pct', 'group_by': [word], 'window': {'period': 'week', 'anchor': '2026-09-14'}}, store)
+
+
+def test_the_stops_on_the_worst_running_grades_lead_with_stops(store):
+    """The coordinator's review of 91e8b33, item 7: the question names stops, so each row leads with the grade's stops, then its
+    minutes down, minutes per stop and downtime % of its own clock, on the worst running grades by speed (CLAUDE.md, exact over
+    summary): the same grades as worst-running-grades, slowest first, each with the speed that ranked it."""
+    example = BY_ID['stops-on-worst-running-grades']
+    got = examples.run_example(example, store, ANCHORS[0])
+    worst = examples.run_example(BY_ID['worst-running-grades'], store, ANCHORS[0])
+    assert example['plan']['measure'] == 'stops' and example['beside'] == ['downtime_minutes', 'minutes_per_stop', 'downtime_clock_pct']
+    assert [r['key'] for r in got['rows']] == [r['key'] for r in worst['rows']] and len(got['rows']) == 5
+    assert [r['rank'] for r in got['rows']] == [{'measure': 'speed_run_fpm', 'value': r['value']} for r in worst['rows']]
+    assert all(isinstance(r['value'], int) for r in got['rows'])   # the lead figure is a count of stops, never a speed
+    assert examples.describe_example(example).startswith('stops (stops) · by board grade · the 5 with the lowest speed without stops')
+
+
+def test_the_per_run_shortfall_is_never_labelled_as_baseline_less_speed(store):
+    """The coordinator's review of 91e8b33, item 6: speed_gap_fpm sums only the runs under their baseline (targets.json's gap) over
+    all the running minutes, so it is not the grade baseline less the grade's speed (26-C: 827.80 less 824.01 is not 15.30). Its
+    label says what it is, so a plant reader beside the baseline never takes it for the difference."""
+    got = examples.run_example(BY_ID['best-running-grades'], store, ANCHORS[0])
+    differs = [r for r in got['rows'] if abs(r['beside']['baseline_speed_fpm'] - r['value'] - r['beside']['speed_gap_fpm']) > 0.01]
+    assert differs   # on the golden page the two figures differ, so a label that reads as the difference misleads
+    label = semantic.model().measures['speed_gap_fpm']['label']
+    assert label == 'Shortfall on runs under baseline' and 'gap to grade baseline' not in examples.describe_example(BY_ID['best-running-grades'])
+
+
+def test_no_answer_says_the_records_hold_no_basis_weight(store):
+    """The coordinator's review of 91e8b33, item 2: peel and core are read by weight, each paper grade at the basis weight the board
+    recipes give it, so no answer may say there is no basis weight. The paper-consumed answer says it stays in area and that pricing
+    paper by weight waits on its own issue; the hand router's weight refusal still refuses, naming where the weights come from."""
+    from investigator.agent import Context, route
+    from investigator.record_store import RecordStore
+    note = store.get_rollstock({'period': 'fiscal', 'anchor': '2026-08-03'})['msf_note']
+    assert 'no basis weight' not in note and 'board recipes' in note and 'area' in note
+    assert 'no basis weight' not in RecordStore.get_rollstock.__doc__ and 'board recipes' in RecordStore.get_rollstock.__doc__
+    for question in ('pounds of peel this week', 'how many tons of paper did we use this week'):
+        with pytest.raises(ValueError) as refused:
+            route(question, Context(ANCHORS[0], 2, scope='shift', period='day'), store.production_days, store)
+        message = str(refused.value)
+        assert 'no basis weight' not in message and 'no weights' not in message and 'board recipes' in message, message
 
 
 def test_a_compared_window_is_held_at_the_querys_own_baselines(store):
@@ -379,14 +431,101 @@ def test_an_example_the_model_cannot_hold_fails_to_load(tmp_path, change, messag
         examples.load(_examples_with(tmp_path, change))
 
 
+def _ranked(e):
+    return next(x for x in e if x['id'] == 'stops-on-worst-running-grades')
+
+
+@pytest.mark.parametrize('change, message', [
+    (lambda e: _ranked(e)['plan']['rank_by'].update(measure='speed_hours'), 'No measure'),
+    (lambda e: _ranked(e)['plan']['rank_by'].update(order='dimension'), 'rank_by orders by value'),
+    (lambda e: _ranked(e)['plan']['rank_by'].update(limit=3), 'cites top_n'),
+    (lambda e: _ranked(e)['plan'].update(limit=5), 'rank_by holds the order and the limit'),
+    (lambda e: _ranked(e)['plan'].update(group_by=[]), 'rank_by ranks the rows of a split'),
+])
+def test_a_ranked_example_the_model_cannot_hold_fails_to_load(tmp_path, change, message):
+    with pytest.raises(examples.ExampleError, match=message):
+        examples.load(_examples_with(tmp_path, change))
+
+
+@pytest.mark.parametrize('value, message', [('Maintenence', "No stop kind 'Maintenence' in the records"),
+                                            ('maintenance', "the records hold it as 'Maintenance'")])
+def test_an_example_naming_a_value_the_records_lack_fails_to_load(tmp_path, store, value, message):
+    """The coordinator's review of 91e8b33, item 4: a filter value is checked against the store's own values when the examples load
+    with the store (the tests, evals/run.py and the app at start), so a misspelled value fails the build, never renders."""
+    path = _examples_with(tmp_path, lambda e: e[0]['plan']['filters'].update(kind=value))
+    with pytest.raises(examples.ExampleError, match=message):
+        examples.load(path, store=store)
+
+
+def test_the_app_refuses_to_start_on_an_example_the_records_cannot_hold(tmp_path, store, monkeypatch):
+    from investigator import server
+    monkeypatch.setattr(examples, 'EXAMPLES_PATH', _examples_with(tmp_path, lambda e: e[0]['plan']['filters'].update(kind='Maintenence')))
+    with pytest.raises(examples.ExampleError, match="No stop kind 'Maintenence'"):
+        server.Workbench(store=store)
+
+
 # ------------------------------------------------------------------ the reading score
 
 def test_the_reading_score_reads_every_wording_and_is_never_a_gate(store):
     score = examples.reading_score(store)
     assert score['of'] == len(EXAMPLES) * (examples.REWORDINGS + 1) == len(score['rows'])
     assert score['owner_of'] == len(EXAMPLES) and 0 <= score['read'] <= score['of']
-    assert {r['outcome'] for r in score['rows']} <= {'pass', 'miss'} and all(r['read_as'] for r in score['rows'])
+    assert {r['outcome'] for r in score['rows']} <= set(examples.OUTCOMES) and all(r['read_as'] for r in score['rows'])
+    assert score['stand_in'] == sum(r['outcome'] == examples.STAND_IN for r in score['rows'])
     assert examples.score_line(score).startswith(f'verified examples read correctly: {score["read"]} of {score["of"]}')
+    assert f'{score["stand_in"]} asked in a stand-in window, never counted as a pass' in examples.score_line(score)
+
+
+def _stand_in_model():
+    """The model with its year to date read in a stand-in window, the 4-4-5 period that holds the page day, as it is until PR #186
+    merges: the year to date is given a period the model does not read (a quarter), with the period as its interim."""
+    spec = json.loads(semantic.MODEL_PATH.read_text())
+    next(w for w in spec['defaults']['relative_windows'] if w['name'] == 'ytd').update(period='quarter', interim='period')
+    return semantic.Model(spec)
+
+
+def test_a_wording_read_in_a_stand_in_window_never_scores_a_pass(store):
+    """The coordinator's review of 91e8b33, item 1: a wording asked in the year to date while the model reads it in its stand-in (the
+    4-4-5 period) is not read as the example's plan, whatever the router makes of it: the stand-in ranks reasons otherwise. Such a
+    row is reported apart, as a stand-in, and never counted as a pass, whether the wording names the window or leaves it unsaid."""
+    mdl = _stand_in_model()
+    example, text = BY_ID['top-maintenance-downtimes'], 'top 5 maintenance downtime reasons by minutes this period'
+    for window in ('ytd', None):
+        assert examples.score_wording(example, text, window, store, mdl=mdl)['outcome'] == examples.STAND_IN, window
+    assert examples.score_wording(example, text, 'period', store, mdl=mdl)['outcome'] == 'pass'   # its own window is read on its plan
+    score = examples.reading_score(store, mdl=mdl, examples=[example])
+    stand_ins = [r for r in score['rows'] if r['outcome'] == examples.STAND_IN]
+    assert stand_ins and all(r['window'] == 'ytd' for r in stand_ins) and score['stand_in'] == len(stand_ins)
+    assert score['read'] == sum(r['outcome'] == 'pass' for r in score['rows']) and not any(r['window'] == 'ytd' and r['outcome'] == 'pass' for r in score['rows'])
+    assert f'{len(stand_ins)} asked in a stand-in window, never counted as a pass' in examples.score_line(score)
+
+
+def test_a_plan_with_no_split_is_read_whatever_its_order_and_limit(store):
+    """The coordinator's review of 91e8b33, item 5: with no split there is one row, so its order and its limit say nothing; a reading
+    that differs only in them is the example's plan. With a split, the limit is part of the plan (the test below)."""
+    window = {'period': 'week', 'anchor': '2026-09-07'}
+    plain = examples._normal({'measure': 'peel_core_pct', 'window': window}, store, semantic.model())
+    for extra in ({'limit': 5}, {'order': 'value_asc'}, {'limit': 1, 'order': 'dimension'}):
+        assert examples._normal({'measure': 'peel_core_pct', 'window': window, **extra}, store, semantic.model()) == plain, extra
+    split = {'measure': 'shear_pct', 'group_by': ['grade'], 'window': window}
+    assert examples._normal({**split, 'limit': 5}, store, semantic.model()) != examples._normal(split, store, semantic.model())
+
+
+def test_a_refusal_passes_only_when_it_is_the_customer_credits_rule(store, monkeypatch):
+    """The coordinator's review of 91e8b33, item 5: the customer-credits example passes only on the rule's own refusal (the absent
+    concept's), never on another refusal that happens to name shipments."""
+    from investigator import agent
+    example = BY_ID['customer-credits']
+    rule = next(c for c in semantic.model().absent.values() if c['name'] == example['refusal']['absent'])
+
+    def refusing(message):
+        def route(*args, **kwargs):
+            raise ValueError(message)
+        return route
+    monkeypatch.setattr(agent, 'route', refusing('The records hold no shipping: shipments are not recorded.'))
+    assert examples.score_wording(example, 'customer credits this week', None, store)['outcome'] == 'miss'
+    monkeypatch.setattr(agent, 'route', refusing(rule['refusal'] + ' Ask the dry-end rejects by reason.'))
+    assert examples.score_wording(example, 'customer credits this week', None, store)['outcome'] == 'pass'
 
 
 def _runner():
@@ -402,23 +541,28 @@ def test_the_reading_score_is_tracked_printed_and_shown_on_evals(tmp_path, capsy
     and /evals shows the score of that run only: a last_run.json of another run shows none."""
     from investigator.evalboard import EvalBoard
     runner = _runner()
-    score = {'read': 1, 'of': 2, 'owner_read': 0, 'owner_of': 1, 'examples': 1, 'interim': 0, 'page': {'day': '2026-09-14', 'shift': 2, 'scope': 'shift'},
-             'rows': [{'example': 'top-maintenance-downtimes', 'text': 'What are our top maintenance downtimes?', 'owner': True, 'window': 'ytd',
-                       'interim': False, 'outcome': 'miss', 'read_as': 'downtime answer (the daily tools)'},
-                      {'example': 'top-maintenance-downtimes', 'text': 'top 5 maintenance downtime reasons', 'owner': False, 'window': 'ytd',
-                       'interim': False, 'outcome': 'pass', 'read_as': 'semantic: …'}]}
+    score = {'read': 1, 'of': 3, 'owner_read': 0, 'owner_of': 1, 'examples': 1, 'stand_in': 1, 'page': {'day': '2026-09-14', 'shift': 2, 'scope': 'shift'},
+             'rows': [{'example': 'top-maintenance-downtimes', 'text': 'What are our top maintenance downtimes?', 'owner': True, 'window': 'last_week',
+                       'outcome': 'miss', 'read_as': 'downtime answer (the daily tools)'},
+                      {'example': 'top-maintenance-downtimes', 'text': 'top 5 maintenance downtime reasons last week', 'owner': False, 'window': 'last_week',
+                       'outcome': 'pass', 'read_as': 'semantic: …'},
+                      {'example': 'top-maintenance-downtimes', 'text': 'top 5 maintenance downtime reasons this year', 'owner': False, 'window': 'ytd',
+                       'outcome': 'stand-in', 'read_as': 'semantic: …'}]}
     line = {'ran_at': '2026-11-17T20:00Z', 'commit': 'abc1234', 'dataset': 'c9754a00c4e2'}
     tracked = runner.last_run([], line, score)
     assert tracked['reading'] == score and 'reading' not in runner.last_run([], line)
     runner.print_reading(score)
     out = capsys.readouterr().out.splitlines()
-    assert out[0] == examples.score_line(score)
-    assert out[1:] == ["  - top-maintenance-downtimes (the owner's words): 'What are our top maintenance downtimes?' read as downtime answer (the daily tools)"]
+    assert out[0] == examples.score_line(score) and '1 asked in a stand-in window, never counted as a pass' in out[0]
+    assert out[1:] == ["  - top-maintenance-downtimes (the owner's words): 'What are our top maintenance downtimes?' read as downtime answer (the daily tools)",
+                       '  stand-in window, reported apart (never a pass):',
+                       "  - top-maintenance-downtimes (rewording, ytd): 'top 5 maintenance downtime reasons this year' read as semantic: …"]
     board = EvalBoard.__new__(EvalBoard)
     board.folder = tmp_path
     (tmp_path / 'last_run.json').write_text(json.dumps(tracked))
     shown = board._reading({'ran_at': line['ran_at'], 'commit': line['commit']})
-    assert (shown['read'], shown['of'], shown['owner_read']) == (1, 2, 0) and [m['text'] for m in shown['misses']] == [score['rows'][0]['text']]
+    assert (shown['read'], shown['of'], shown['owner_read'], shown['stand_in']) == (1, 3, 0, 1)
+    assert [m['text'] for m in shown['misses']] == [score['rows'][0]['text']] and [m['text'] for m in shown['stand_ins']] == [score['rows'][2]['text']]
     assert board._reading({'ran_at': '2026-11-16T20:00Z', 'commit': line['commit']}) is None   # another run's file shows nothing
 
 
