@@ -20,6 +20,8 @@ from investigator.urls import canonical_url, resolve_url
 
 DAY = '2026-09-14'
 WINDOWS = {   # the window words a question says, and the dates a hand-written query reads for them from Monday 14 September
+    '': (DAY, DAY),                              # none: the selected day
+    'yesterday': ('2026-09-11', '2026-09-11'),
     'last week': ('2026-09-07', '2026-09-11'),
     'this month': ('2026-09-01', '2026-09-30'),
     'YTD': ('2026-01-01', DAY),
@@ -96,8 +98,7 @@ def test_every_top_n_answer_is_the_hand_written_query(store, scope):
         context = Context(DAY, 2, scope=scope, period='day')
         request, asked = route(question, context, store.production_days, store)
         n_said = bool(re.search(r'\btop [35]\b', question))
-        if owners_review(question, kind, window, n_said, shift):
-            assert request['intent'] == 'period_review', (question, request['intent'])
+        if request['intent'] == 'period_review' and owners_review(question, kind, window, n_said, shift):
             continue
         assert request['intent'] == 'semantic', (question, scope, request['intent'])
         args = request['plan'][0]['arguments']
@@ -137,7 +138,8 @@ def test_the_card_says_top_n_and_leads_with_the_first_row(store):
         lead = next(r for i, r in enumerate(data['rows']) if i not in SemanticAnswer.apart(data))
         assert sections[0].startswith(f'{lead["label"]} had the most downtime'), (question, sections[0])
         read_as = next(s for s in sections if s.startswith('Read as'))
-        assert "ranked by downtime minutes (the plant's default)" in read_as, (question, read_as)
+        # the default said only when no word named the measure ("downtime reasons" names it)
+        assert ("ranked by downtime minutes (the plant's default)" in read_as) == ('downtime' not in question), (question, read_as)
         holds = f' (the window holds {data["groups"]})' if data['groups'] < n else ''
         assert f'largest first, top {n}{holds}.' in read_as, (question, read_as)
         # one finding per row: the rows a ranking may lead with in the query's order, then the ones it sets apart

@@ -675,6 +675,12 @@ def validate(query, store=None, mdl=None):
         raise SemanticError('compare=prev puts the previous window of the same kind beside a query; the year to date has none: ask it by '
                             'itself, or a month or a 4-4-5 period against the one before it')
     timed = next((d for d in by if mdl.dimensions[d]['type'] == 'time'), None)
+    if timed and query.window['period'] == YTD:
+        # the year to date ends on its anchor, inside its own week, month and 4-4-5 period: a split of it by time would end on a part
+        # of one, read as the whole (the reviewer's check of b76f8e4: "which week had the fewest stops this year" named the one day
+        # of the anchor's week)
+        raise SemanticError(f'A split of the year to date by {timed} ends on a part of the anchor\'s {timed}, read as a whole one: ask the '
+                            'year to date by a dimension that is not time, or a month or a 4-4-5 period by day or week')
     if compare and timed:
         # this week's Monday is not last week's: no row of a time split lines up with the window before, and a missed
         # row would read as a zero
@@ -1287,7 +1293,8 @@ def run(query, store, rates=None, mdl=None):
             'window': window, 'previous_window': previous, 'shift': query.shift,
             'dataset_version': store.content_hash, 'coverage': window['coverage'] if not previous else
             ('complete' if window['coverage'] == previous['coverage'] == 'complete' else 'unavailable' if window['coverage'] == 'unavailable' else 'partial'),
-            'excluded_records': [], 'rows': rows, 'groups': groups, 'rows_shown': len(rows)}
+            'excluded_records': [], 'rows': rows, 'groups': groups, 'rows_shown': len(rows),
+            'limit': query.limit}   # the rows asked (a card's "top 5" is this figure, issue #185)
     if query.share is not None:
         data['share_row'] = share_row   # the index of the asked value's row (the last when the limit or no records left it out)
     for key in ('value', 'numerator', 'denominator', 'quantity'):

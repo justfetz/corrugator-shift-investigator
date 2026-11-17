@@ -136,10 +136,11 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
             params += [(key, slug(lead[key])) for key in ('reason', 'place', 'grade', 'waste') if key in lead]
         elif tools == (semantic.TOOL,):
             measure = 'semantic'   # issue #117: the query's own names, already the model's (validate resolved any synonym)
-            params.append(('m', first['measure']))
+            lead = request.get('lead') or {}
+            if not lead.get('default'):
+                params.append(('m', first['measure']))   # ... left out when it is the split's default ranking (issue #185)
             if first['group_by']:
                 params.append(('by', ','.join(first['group_by'])))
-            lead = request.get('lead') or {}
             if lead.get('rank'):
                 params.append(('rank', lead['rank']))   # issue #144: a ranked question keeps its ranking
             if first.get('limit', semantic.DEFAULT_LIMIT) != semantic.DEFAULT_LIMIT:
@@ -629,7 +630,16 @@ def _semantic(fields, context, window, shifts, store):
         if len(group_by) != 1:
             raise ValueError('share=each reads each row of a single by= dimension as its share of the total, for a count or a sum')
         lead['shares'], share = True, None
-    query = semantic.SemanticQuery(measure=fields.get('m'), group_by=group_by, filters=filters, window=window,
+    measure = fields.get('m')
+    if measure is None and order is not None and len(group_by) == 1:
+        # a ranking of a dimension the model ranks by a default measure (the stop reasons: downtime minutes, issue #185) names none
+        try:
+            rank_by = semantic.model().dimensions[semantic.resolve_dimension(group_by[0])].get('rank_by')
+        except semantic.SemanticError:
+            rank_by = None
+        if rank_by:
+            measure, lead['default'] = rank_by['measure'], True
+    query = semantic.SemanticQuery(measure=measure, group_by=group_by, filters=filters, window=window,
                                    compare='previous' if compare else None, order=order, limit=limit, shift=shift, share=share)
     query = semantic.validate(query, store)
     if lead.get('shares') and semantic.model().measures[query.measure]['agg'] not in semantic.ADDITIVE:

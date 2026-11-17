@@ -2199,7 +2199,7 @@ class SemanticAnswer:
         if data['group_by']:
             what += ' by ' + ' and '.join(GROUP_NOUNS.get(d, d.replace('_', ' ')) for d in data['group_by'])
         parts = [what]
-        default = self.ranked_by_default(data) if self.lead.get('rank') else None
+        default = self.ranked_by_default(data) if self.lead.get('rank') and self.lead.get('default') else None
         if default:
             # issue #185: a ranking of a dimension by the measure the model ranks it by when none is named
             parts.append(f'ranked by {default} (the plant\'s default)')

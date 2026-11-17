@@ -485,8 +485,8 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # + the review of 7b46463's 5 + its probe's 4 + the reviewer's check of its fix, 1 + the review of 97b81f4's 9 + its probe's 1
     # + the reviewer's check of its fix, 2 + the review of 2c28fd3's 2 + the reviewer's check of its fix, 1
     # + 7 issue #164 money ledger cases + 1 asked by question in PR #168's fix round + 11 issue #177 All-day cases + 9 issue #177
-    # named-shift-list cases
-    assert len(routing) == 539 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # named-shift-list cases + 19 issue #185 top-N and year-to-date cases + 5 from the reviewer's check of its first fix
+    assert len(routing) == 563 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

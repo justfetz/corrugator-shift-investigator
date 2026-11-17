@@ -23524,7 +23524,7 @@
    "reviewed_by": "owner-pending",
    "question": "what were my top maintenance reasons last week?",
    "expect": {
-    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5&kind=Maintenance",
+    "url": "/corr/1/week/2026-09-07?measure=semantic&by=reason&rank=most&top=5&kind=Maintenance",
     "status": "complete",
     "tools": [
      {
@@ -23563,7 +23563,7 @@
      "^Knife / slitter jam had the most downtime, stop kind Maintenance last week: \\*\\*63\\.13 min\\*\\*"
     ]
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it: 'reasons' with no measure named the semantic model holds. Read as downtime minutes by reason (the model's rank_by), the top 5 when no number is said: 7-11 Sep, Knife / slitter jam 63.13 min, Steam / moisture 17.70, Stacker 3.65, Other 2.30, Glue / starch 2.28 (Other and Glue / starch both round to 2.3; Other is the larger). The page on shift 2: no shift named, so every shift."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it: 'reasons' with no measure named the semantic model holds. Read as downtime minutes by reason (the model's rank_by), the top 5 when no number is said: 7-11 Sep, Knife / slitter jam 63.13 min, Steam / moisture 17.70, Stacker 3.65, Other 2.30, Glue / starch 2.28 (Other and Glue / starch both round to 2.3; Other is the larger). The page on shift 2: no shift named, so every shift. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-maintenance-reasons-last-week-all",
@@ -23573,7 +23573,7 @@
    "scope": "day",
    "question": "what were my top maintenance reasons last week?",
    "expect": {
-    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5&kind=Maintenance",
+    "url": "/corr/1/week/2026-09-07?measure=semantic&by=reason&rank=most&top=5&kind=Maintenance",
     "status": "complete",
     "tools": [
      {
@@ -23612,7 +23612,7 @@
      "^Knife / slitter jam had the most downtime, stop kind Maintenance last week: \\*\\*63\\.13 min\\*\\*"
     ]
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it: 'reasons' with no measure named the semantic model holds. Read as downtime minutes by reason (the model's rank_by), the top 5 when no number is said: 7-11 Sep, Knife / slitter jam 63.13 min, Steam / moisture 17.70, Stacker 3.65, Other 2.30, Glue / starch 2.28 (Other and Glue / starch both round to 2.3; Other is the larger). The page on All shifts."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it: 'reasons' with no measure named the semantic model holds. Read as downtime minutes by reason (the model's rank_by), the top 5 when no number is said: 7-11 Sep, Knife / slitter jam 63.13 min, Steam / moisture 17.70, Stacker 3.65, Other 2.30, Glue / starch 2.28 (Other and Glue / starch both round to 2.3; Other is the larger). The page on All shifts. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-operator-downtime-reasons-ytd",
@@ -23653,10 +23653,11 @@
      "^- Raw material \\(roll\\): \\*\\*945\\.25 min\\*\\*",
      "^- Stacker: \\*\\*810\\.60 min\\*\\*",
      "^- Other: \\*\\*512\\.82 min\\*\\*",
-     "^Read as: downtime in min, stop kind Operator by stop reason, ranked by downtime minutes \\(the plant's default\\), Year to date, 1 Jan–14 Sep 2026 \\(2026-01-01 to 2026-09-14\\), all shifts, largest first, top 5\\.$"
-    ]
+     "^Read as: downtime in min, stop kind Operator by stop reason, Year to date, 1 Jan–14 Sep 2026 \\(2026-01-01 to 2026-09-14\\), all shifts, largest first, top 5\\.$"
+    ],
+    "sections_not_match": "plant's default"
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the selected day's downtime review (2.88% of the day's minutes): the parser refused 'ytd' and the hand router's answer stood. The year to date is a window of the semantic model, 1 Jan to the selected day: Order change 1,326.68 min, Missed splice 1,137.93, Raw material (roll) 945.25, Stacker 810.60, Other 512.82. The page on shift 2: no shift named, so every shift."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the selected day's downtime review (2.88% of the day's minutes): the parser refused 'ytd' and the hand router's answer stood. The year to date is a window of the semantic model, 1 Jan to the selected day: Order change 1,326.68 min, Missed splice 1,137.93, Raw material (roll) 945.25, Stacker 810.60, Other 512.82. The page on shift 2: no shift named, so every shift. 'Downtime reasons' names the measure, so the Read as line says no default."
   },
   {
    "id": "top-n-operator-downtime-reasons-ytd-all",
@@ -23698,10 +23699,11 @@
      "^- Raw material \\(roll\\): \\*\\*945\\.25 min\\*\\*",
      "^- Stacker: \\*\\*810\\.60 min\\*\\*",
      "^- Other: \\*\\*512\\.82 min\\*\\*",
-     "^Read as: downtime in min, stop kind Operator by stop reason, ranked by downtime minutes \\(the plant's default\\), Year to date, 1 Jan–14 Sep 2026 \\(2026-01-01 to 2026-09-14\\), all shifts, largest first, top 5\\.$"
-    ]
+     "^Read as: downtime in min, stop kind Operator by stop reason, Year to date, 1 Jan–14 Sep 2026 \\(2026-01-01 to 2026-09-14\\), all shifts, largest first, top 5\\.$"
+    ],
+    "sections_not_match": "plant's default"
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the selected day's downtime review (2.88% of the day's minutes): the parser refused 'ytd' and the hand router's answer stood. The year to date is a window of the semantic model, 1 Jan to the selected day: Order change 1,326.68 min, Missed splice 1,137.93, Raw material (roll) 945.25, Stacker 810.60, Other 512.82. The page on All shifts."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the selected day's downtime review (2.88% of the day's minutes): the parser refused 'ytd' and the hand router's answer stood. The year to date is a window of the semantic model, 1 Jan to the selected day: Order change 1,326.68 min, Missed splice 1,137.93, Raw material (roll) 945.25, Stacker 810.60, Other 512.82. The page on All shifts. 'Downtime reasons' names the measure, so the Read as line says no default."
   },
   {
    "id": "top-n-which-maintenance-reason-most-minutes-last-week",
@@ -23739,7 +23741,7 @@
     "sections_match": [
      "^Knife / slitter jam had the most downtime, stop kind Maintenance (last|this) week: \\*\\*63\\.13 min\\*\\*"
     ],
-    "sections_not_match": "Missed splice"
+    "sections_not_match": "Missed splice|plant's default"
    },
    "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the whole Pareto of every kind, led by Missed splice (an operator reason, 103.43 min): the parser did not read 'reason' after the value 'maintenance'. One reason asked ('which reason') keeps every row; the maintenance reason with the most minutes is Knife / slitter jam, 63.13 min. The page on shift 2: no shift named, so every shift."
   },
@@ -23780,7 +23782,7 @@
     "sections_match": [
      "^Knife / slitter jam had the most downtime, stop kind Maintenance (last|this) week: \\*\\*63\\.13 min\\*\\*"
     ],
-    "sections_not_match": "Missed splice"
+    "sections_not_match": "Missed splice|plant's default"
    },
    "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the whole Pareto of every kind, led by Missed splice (an operator reason, 103.43 min): the parser did not read 'reason' after the value 'maintenance'. One reason asked ('which reason') keeps every row; the maintenance reason with the most minutes is Knife / slitter jam, 63.13 min. The page on All shifts."
   },
@@ -23791,7 +23793,7 @@
    "reviewed_by": "owner-pending",
    "question": "top 3 operator reasons this month",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=month&by=reason&rank=most&top=3&kind=Operator",
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=month&by=reason&rank=most&top=3&kind=Operator",
     "status": "complete",
     "tools": [
      {
@@ -23825,7 +23827,7 @@
     ],
     "sections_not_match": "^- (Stacker|Glue / starch|Other):"
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named). September, Operator: Missed splice 202.60 min, Order change 155.42, Raw material (roll) 120.38; the three asked, no more. The page on shift 2: no shift named, so every shift."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named). September, Operator: Missed splice 202.60 min, Order change 155.42, Raw material (roll) 120.38; the three asked, no more. The page on shift 2: no shift named, so every shift. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-top-3-operator-reasons-this-month-all",
@@ -23835,7 +23837,7 @@
    "scope": "day",
    "question": "top 3 operator reasons this month",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=month&by=reason&rank=most&top=3&kind=Operator",
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=month&by=reason&rank=most&top=3&kind=Operator",
     "status": "complete",
     "tools": [
      {
@@ -23869,7 +23871,7 @@
     ],
     "sections_not_match": "^- (Stacker|Glue / starch|Other):"
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named). September, Operator: Missed splice 202.60 min, Order change 155.42, Raw material (roll) 120.38; the three asked, no more. The page on All shifts."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named). September, Operator: Missed splice 202.60 min, Order change 155.42, Raw material (roll) 120.38; the three asked, no more. The page on All shifts. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-biggest-maintenance-problems-this-week",
@@ -23878,7 +23880,7 @@
    "reviewed_by": "owner-pending",
    "question": "biggest maintenance problems this week",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=reason&rank=most&top=5&kind=Maintenance",
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=week&by=reason&rank=most&top=5&kind=Maintenance",
     "status": "complete",
     "tools": [
      {
@@ -23913,7 +23915,7 @@
      ", largest first, top 5\\.$"
     ]
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named; 'problems' was no word of the model). 'Problem' is a synonym of the stop reason: 14-18 Sep, Maintenance: Knife / slitter jam 35.08 min, Other 17.57, Stacker 11.67, Steam / moisture 4.68, Glue / starch 1.43. The page on shift 2: no shift named, so every shift."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named; 'problems' was no word of the model). 'Problem' is a synonym of the stop reason: 14-18 Sep, Maintenance: Knife / slitter jam 35.08 min, Other 17.57, Stacker 11.67, Steam / moisture 4.68, Glue / starch 1.43. The page on shift 2: no shift named, so every shift. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-biggest-maintenance-problems-this-week-all",
@@ -23923,7 +23925,7 @@
    "scope": "day",
    "question": "biggest maintenance problems this week",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=reason&rank=most&top=5&kind=Maintenance",
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=week&by=reason&rank=most&top=5&kind=Maintenance",
     "status": "complete",
     "tools": [
      {
@@ -23958,7 +23960,7 @@
      ", largest first, top 5\\.$"
     ]
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named; 'problems' was no word of the model). 'Problem' is a synonym of the stop reason: 14-18 Sep, Maintenance: Knife / slitter jam 35.08 min, Other 17.57, Stacker 11.67, Steam / moisture 4.68, Glue / starch 1.43. The page on All shifts."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main refused it (no measure named; 'problems' was no word of the model). 'Problem' is a synonym of the stop reason: 14-18 Sep, Maintenance: Knife / slitter jam 35.08 min, Other 17.57, Stacker 11.67, Steam / moisture 4.68, Glue / starch 1.43. The page on All shifts. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-reasons-by-stops-last-week",
@@ -24220,7 +24222,7 @@
    "reviewed_by": "owner-pending",
    "question": "maintenance pareto last week",
    "expect": {
-    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5&kind=Maintenance",
+    "url": "/corr/1/week/2026-09-07?measure=semantic&by=reason&rank=most&top=5&kind=Maintenance",
     "status": "complete",
     "tools": [
      {
@@ -24250,7 +24252,7 @@
      "^Knife / slitter jam had the most downtime, stop kind Maintenance (last|this) week: \\*\\*63\\.13 min\\*\\*"
     ]
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the week's KPI summary (37,180.4 MSF). 'Pareto' is the stop reasons ranked (the model's rank_by words), by downtime minutes when no measure is named. The page on shift 2: no shift named, so every shift."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the week's KPI summary (37,180.4 MSF). 'Pareto' is the stop reasons ranked (the model's rank_by words), by downtime minutes when no measure is named. The page on shift 2: no shift named, so every shift. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-maintenance-pareto-last-week-all",
@@ -24260,7 +24262,7 @@
    "scope": "day",
    "question": "maintenance pareto last week",
    "expect": {
-    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&by=reason&rank=most&top=5&kind=Maintenance",
+    "url": "/corr/1/week/2026-09-07?measure=semantic&by=reason&rank=most&top=5&kind=Maintenance",
     "status": "complete",
     "tools": [
      {
@@ -24290,7 +24292,7 @@
      "^Knife / slitter jam had the most downtime, stop kind Maintenance (last|this) week: \\*\\*63\\.13 min\\*\\*"
     ]
    },
-   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the week's KPI summary (37,180.4 MSF). 'Pareto' is the stop reasons ranked (the model's rank_by words), by downtime minutes when no measure is named. The page on All shifts."
+   "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Main answered the week's KPI summary (37,180.4 MSF). 'Pareto' is the stop reasons ranked (the model's rank_by words), by downtime minutes when no measure is named. The page on All shifts. The address leaves m= out: the measure is the stop reasons' default ranking, no word of the question, so the card says so."
   },
   {
    "id": "top-n-month-to-date-refused-not-the-day",
@@ -24338,6 +24340,194 @@
     ]
    },
    "note": "Issue #185 (the owner, 2026-11-16: \"How many or top N? Why does just the summary come back?\"; the owner's calls on #172: top reasons rank by downtime minutes with the percent beside, five when no N is said). Checked against hand-written SQL over `stops` (the PR body has the SQL). Re-pointed from semantic-this-year-refused, whose question now asks 'last year': 'this year' is the year to date (1 Jan-14 Sep 2026, 4,527 stops), never the selected day."
+  },
+  {
+   "id": "top-n-ytd-money-lost-refused-not-the-day",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how much money did we lose this year",
+   "expect": {
+    "raises": "^The question names no measure the semantic model holds\\. Did you mean '[^']+ year to date'"
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: b76f8e4 read 'this year' as the year to date and, the rest refused, let the shift's dollars for the selected day answer (**$502** above standard this shift). No hand route reads the year to date: refused, with questions over it. Main refused 'this year' as a window."
+  },
+  {
+   "id": "top-n-ytd-waste-breakdown-refused-not-the-day",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "waste breakdown this year",
+   "expect": {
+    "raises": "^'breakdown' is not a word the semantic model reads\\. Did you mean '[^']+ year to date'"
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: b76f8e4 answered the selected day's waste breakdown; refused over it, the word as said (never the parser's own token)."
+  },
+  {
+   "id": "top-n-ytd-week-split-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "which week had the fewest stops this year",
+   "expect": {
+    "raises": "^A split of the year to date by week ends on a part of the anchor's week, read as a whole one"
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: b76f8e4 named 'Week of 2026-09-14 had the fewest stops year to date: **25 stops**', a week that is only Monday 14 September in the window. The year to date ends inside its own week, month and period: never split by time."
+  },
+  {
+   "id": "top-n-a-year-is-a-rate-not-a-window",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "what is trim costing us per year this month",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=money&window=month&lens=ownership",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "lens": "ownership"
+      }
+     }
+    ]
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: b76f8e4 read 'per year' as a window it does not read and refused it over the month's ownership lens, which main answered. 'A year' or 'per year' said as a rate is no window."
+  },
+  {
+   "id": "top-n-a-year-is-a-rate-not-a-window-review",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how much a year are we losing to downtime this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       }
+      }
+     }
+    ]
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: the same, over the week's downtime review, which main answered."
+  },
+  {
+   "id": "top-n-top-5-maintenance-reasons-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 5 maintenance reasons yesterday",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=semantic&by=reason&rank=most&top=5&kind=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {
+        "kind": "Maintenance"
+       },
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "limit": 5,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Knife / slitter jam had the most downtime, stop kind Maintenance( yesterday)?: \\*\\*5\\.82 min\\*\\*",
+     "^- Steam / moisture: \\*\\*3\\.43 min\\*\\*",
+     ", all shifts, largest first, top 5 \\(the window holds 2\\)\\.$"
+    ]
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: on a one-day window the day's downtime breakdown kept a top N it does not list (main and b76f8e4: '**0.00%** of the shift in maintenance downtime' for shift 2 alone). Friday 11 September, all shifts: Knife / slitter jam 5.82 min (3 stops), Steam / moisture 3.43 (1); the window holds two, and the Read as line says so."
+  },
+  {
+   "id": "top-n-top-5-maintenance-reasons-yesterday-all",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "top 5 maintenance reasons yesterday",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=semantic&by=reason&rank=most&top=5&kind=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {
+        "kind": "Maintenance"
+       },
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "limit": 5,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Knife / slitter jam had the most downtime, stop kind Maintenance( yesterday)?: \\*\\*5\\.82 min\\*\\*",
+     "^- Steam / moisture: \\*\\*3\\.43 min\\*\\*",
+     ", all shifts, largest first, top 5 \\(the window holds 2\\)\\.$"
+    ]
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: on a one-day window the day's downtime breakdown kept a top N it does not list (main and b76f8e4: '**0.00%** of the shift in maintenance downtime' for shift 2 alone). Friday 11 September, all shifts: Knife / slitter jam 5.82 min (3 stops), Steam / moisture 3.43 (1); the window holds two, and the Read as line says so."
+  },
+  {
+   "id": "top-n-this-years-top-reasons",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "this year's top reasons",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=ytd&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Order change had the most downtime year to date, leaving out Planned maintenance: \\*\\*1,326\\.68 min\\*\\*",
+     "^- Missed splice: \\*\\*1,137\\.93 min\\*\\*",
+     "^- Stacker: \\*\\*1,028\\.42 min\\*\\*",
+     "^- Raw material \\(roll\\): \\*\\*945\\.25 min\\*\\*",
+     "^- Planned maintenance: \\*\\*4,757\\.00 min\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the reviewer subagent's check of b76f8e4: the possessive of a year-to-date word was refused ('s' is not a word). Every kind's top 5 by minutes holds Planned maintenance (4,757 min), which never leads: it is listed apart, so four reasons are ranked."
   }
  ]
 }

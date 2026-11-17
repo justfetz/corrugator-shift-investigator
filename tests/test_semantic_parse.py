@@ -877,11 +877,12 @@ def test_the_runner_fails_the_selected_shifts_breakdown_a_tie_named_alone_and_a_
 def test_a_window_the_hand_route_would_answer_as_the_selected_day_is_refused(store):
     """Round 5 of the coordinator's notes on #144: "Tuesday", "last Monday", "this year", "in 2025", "over the weekend", "the day
     before", "the previous day" and a rolling window answered the selected day. The selected day's own weekday ("on Monday" on a
-    Monday) and a weekday profile ("do Mondays stand out") keep their answers."""
-    for question, said in (('Stops on Tuesday', 'tuesday'), ('Stops last Monday', 'last monday'), ('Stops this year', 'this year'),
+    Monday) and a weekday profile ("do Mondays stand out") keep their answers. "This year" is the year to date since issue #185
+    (tests/test_top_n.py), so the year before stands for it here."""
+    for question, said in (('Stops on Tuesday', 'tuesday'), ('Stops last Monday', 'last monday'), ('Stops last year', 'last year'),
                            ('Stops in 2025', 'in 2025'), ('Stops over the weekend', 'weekend'), ('Stops the day before', 'day before'),
                            ('Stops the previous day', 'previous day'), ('Downtime past two weeks', 'past two weeks'),
-                           ('Which downtime reason cost the most minutes this year?', 'this year')):
+                           ('Which downtime reason cost the most minutes last year?', 'last year')):
         with pytest.raises(ValueError, match=f"'{said}' is not a window"):
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
     for question in ('Show downtime by reason on Monday', 'Stops per day this month: do Mondays stand out?'):
