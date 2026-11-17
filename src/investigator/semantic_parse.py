@@ -358,6 +358,8 @@ def ytd_pattern(mdl=None):
     return _YTD[id(mdl)]
 
 
+# "A year", "per year" said as a rate, never a window (issue #185)
+RATE_SAID = r"\b(?:a|an|per|each|every)\s+(?:year|quarter)\b"
 # The windows a question offered in place of a window the model does not read names (issue #185), by the words said: the windows the
 # model reads that hold the selected day, the nearest first. Another year, one day and a weekday are offered none.
 WINDOW_OFFERS = ((r"\b(19|20)\d\d\b|\b(last|next|previous|prior|past)\s+(\d+\s+|[a-z]+\s+)?years?\b", ()),
@@ -525,7 +527,13 @@ def _read(reading, text, context, store, mdl):
         raise Refused(f"'{read_words['words']}' and '{ytd[0].group(0).strip()}' are two windows: ask one window at a time")
     unread = re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
-        wrong = re.search(WRONG_WINDOW, lower)
+        # "a year", "per year" said as a rate ("what is trim costing us per year", "dollars a year from side trim": the levers' own
+        # yearly figure) is no window: refused by the reading as before, never over a hand route; a window said beside it still is
+        # ("what is trim costing us per year this quarter"; the reviewer's checks of b76f8e4 and 5a93655)
+        scan = re.sub(RATE_SAID, ' | ', lower)
+        real = re.search(UNREAD_WINDOW, scan) or re.search(agent.ROLLING_WINDOW, scan)
+        rate, unread = real is None, real or unread
+        wrong = re.search(WRONG_WINDOW, lower if rate else scan)
         weekday = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')[date.fromisoformat(context.production_day).weekday()]
         words = unread[0].strip()
         if words == 'to date':
@@ -534,9 +542,6 @@ def _read(reading, text, context, store, mdl):
             reading.cues.add('wrong window')
             words = re.sub(r'^the\s+', '', wrong[0].strip())
         offers = []
-        # "a year", "per year" said as a rate ("what is trim costing us per year", "dollars a year from side trim": the levers' own
-        # yearly figure) is no window: refused by the reading as before, never over a hand route (the reviewer's check of b76f8e4)
-        rate = re.fullmatch(r"(year|quarter)", words) and re.search(r"\b(a|an|per|each|every)\s+(year|quarter)\b", lower)
         if not rate and not re.fullmatch(r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?", words):
             # a window the model does not read is never answered as another one (issue #185, item 4): refused over any hand route
             # that does not read its window words itself (route), with the same question over the windows the model reads. A weekday
@@ -1601,6 +1606,16 @@ def _assign(reading, items, mdl, store, a, context):
             measure = 'downtime_minutes'
     # ... never of one ("what does a missed splice cost": a cost per splice, which no measure keeps, never the window's total)
     per_unit = any(i > 0 and items[i - 1].words in ('a', 'an', 'each', 'one', 'per', 'every') for i, _ in values)
+    if measure is None and units and units[-1] == '$' and values and not group_by and per_unit:
+        # "what does a missed splice cost": the cost of one stop, which no measure keeps; never the window's total, nor the shift's
+        # dollars over a hand route (the cue 'said'; the reviewer's check of 5a93655)
+        reading.cues.add('said')
+        one = next(it for i, it in values if i > 0 and items[i - 1].words in ('a', 'an', 'each', 'one', 'per', 'every'))
+        entities = {mdl.dimensions[e[1]]['entity'] for e in one.value}
+        priced = [n for n, o in mdl.measures.items() if o['agg'] == 'priced' and entities == {mdl.measure_entities(n)[0]}]
+        raise Refused(f"'{one.words}' asks what one costs, and the semantic model prices a window's records, never one of them",
+                      [_ask(mdl, reading, priced[0], filters={one.value[0][1]: one.value[0][2]},
+                            word=next(iter(mdl.measures[priced[0]].get('synonyms') or []), None))] if len(priced) == 1 else [])
     if measure is None and units and units[-1] == '$' and values and not group_by and not per_unit:
         # money asked of a value of one kind of record, with no measure named ("how much money have missed splices cost me"): the one
         # priced measure of those records (a stop's is its downtime priced as machine time; issue #185), never a choice between several;
@@ -2060,8 +2075,11 @@ def request_of(reading):
         lead['shares'] = True
     if reading.versus:
         lead['versus'] = list(reading.versus)
-    if 'default measure' in reading.cues:
-        lead['default'] = True   # the measure is the split's default ranking, no word of the question (issue #185): the address leaves out m=
+    rank_by = (semantic.model().dimensions[query.group_by[0]].get('rank_by') or {}) if len(query.group_by) == 1 else {}
+    if 'default measure' in reading.cues and rank_by.get('measure') == query.measure:
+        # the measure is the split's default ranking, no word of the question (issue #185): the address leaves out m=; a unit said
+        # makes another measure ("which reasons cost the most": the downtime's dollars), which the address names
+        lead['default'] = True
     request = {'intent': 'semantic', 'shifts': [query.shift] if query.shift else [], 'kind': None, 'group_by': 'reason',
                'want_chart': bool(query.group_by), 'ranking_metrics': [], 'plan': [{'tool': semantic.TOOL, 'arguments': query.to_arguments()}]}
     if lead:

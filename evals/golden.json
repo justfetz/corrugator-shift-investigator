@@ -24528,6 +24528,61 @@
     ]
    },
    "note": "Issue #185, the reviewer subagent's check of b76f8e4: the possessive of a year-to-date word was refused ('s' is not a word). Every kind's top 5 by minutes holds Planned maintenance (4,757 min), which never leads: it is listed apart, so four reasons are ranked."
+  },
+  {
+   "id": "top-n-reasons-cost-the-most-money-names-its-measure",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "which reasons cost the most money last week",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_usd&by=reason&rank=most&top=5",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_usd",
+       "group_by": [
+        "reason"
+       ],
+       "limit": 5
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime, priced (last|this) week, leaving out Planned maintenance: \\*\\*\\$2,069\\*\\*"
+    ],
+    "sections_not_match": "plant's default"
+   },
+   "note": "Issue #185, the reviewer subagent's check of 5a93655: the money asked converts the default minutes into the downtime's dollars, so the address names m=downtime_usd; 5a93655 left m= out and its address answered the minutes. Missed splice, 103.43 min x $1,200/hr = $2,069."
+  },
+  {
+   "id": "top-n-what-one-splice-costs-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "what does a missed splice cost",
+   "expect": {
+    "raises": "^'missed splice' asks what one costs, and the semantic model prices a window's records, never one of them\\. Did you mean 'downtime dollars for missed splice'\\?$"
+   },
+   "note": "Issue #185, the reviewer subagent's check of 5a93655: the cost of one stop is no measure the model keeps: never the window's total ($83, 5a93655's reading) nor the shift's dollars (main's money card, '$502 above standard this shift')."
+  },
+  {
+   "id": "top-n-a-rate-beside-an-unread-window-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "what is trim costing us per year this quarter",
+   "expect": {
+    "raises": "^'quarter' is not a window the semantic model reads"
+   },
+   "note": "Issue #185, the reviewer subagent's check of 5a93655: 'per year' is a rate, but 'this quarter' beside it is still a window the model does not read; 5a93655 let the selected day's levers answer."
   }
  ]
 }

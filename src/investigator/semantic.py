@@ -675,7 +675,7 @@ def validate(query, store=None, mdl=None):
         raise SemanticError('compare=prev puts the previous window of the same kind beside a query; the year to date has none: ask it by '
                             'itself, or a month or a 4-4-5 period against the one before it')
     timed = next((d for d in by if mdl.dimensions[d]['type'] == 'time'), None)
-    if timed and query.window['period'] == YTD:
+    if timed and query.window['period'] == YTD and mdl.dimensions[timed]['grain'] != 'day':   # it holds the anchor's whole day
         # the year to date ends on its anchor, inside its own week, month and 4-4-5 period: a split of it by time would end on a part
         # of one, read as the whole (the reviewer's check of b76f8e4: "which week had the fewest stops this year" named the one day
         # of the anchor's week)

@@ -98,7 +98,8 @@ def test_every_top_n_answer_is_the_hand_written_query(store, scope):
         context = Context(DAY, 2, scope=scope, period='day')
         request, asked = route(question, context, store.production_days, store)
         n_said = bool(re.search(r'\btop [35]\b', question))
-        if request['intent'] == 'period_review' and owners_review(question, kind, window, n_said, shift):
+        if owners_review(question, kind, window, n_said, shift) and (shift is None or request['intent'] == 'period_review'):
+            assert request['intent'] == 'period_review', (question, scope, request['intent'])   # the owner's review keeps it
             continue
         assert request['intent'] == 'semantic', (question, scope, request['intent'])
         args = request['plan'][0]['arguments']
@@ -158,9 +159,33 @@ def test_the_card_says_top_n_and_leads_with_the_first_row(store):
     ('most common downtime reasons last week', 'stops', 5),     # "most common" is a count
 ])
 def test_a_named_measure_or_unit_ranks_by_it(store, question, measure, limit):
-    request, _ = route(question, Context(DAY, 2, scope='day', period='day'), store.production_days, store)
+    """... and its address answers the same query: m= is left out only for the default measure itself."""
+    request, asked = route(question, Context(DAY, 2, scope='day', period='day'), store.production_days, store)
     args = request['plan'][0]['arguments']
     assert (request['intent'], args['measure'], args['group_by'], args['limit']) == ('semantic', measure, ['reason'], limit), args
+    url = canonical_url(request, asked)
+    assert ('&m=' in url) == (not (request.get('lead') or {}).get('default'))
+    resolved = resolve_url(url, store)['request']
+    assert resolved['plan'] == request['plan'] and resolved.get('lead') == request.get('lead'), url
+
+
+@pytest.mark.parametrize('question, measure', [('top maintenance reasons last week', 'downtime_minutes'),
+                                               ('top maintenance reasons by percent last week', 'downtime_pct'),
+                                               ('top reasons in dollars last week', 'downtime_usd')])
+def test_the_default_leaves_m_out_of_the_address_only_when_it_is_the_measure(store, question, measure):
+    request, asked = route(question, Context(DAY, 2, scope='day', period='day'), store.production_days, store)
+    url = canonical_url(request, asked)
+    assert request['plan'][0]['arguments']['measure'] == measure
+    assert ('&m=' not in url) == (measure == 'downtime_minutes'), url
+    assert resolve_url(url, store)['request']['plan'] == request['plan']
+
+
+def test_the_year_to_date_splits_by_day_but_never_by_a_longer_grain(store):
+    args = {'measure': 'stops', 'window': {'period': 'ytd', 'anchor': DAY}}
+    assert S.run({**args, 'group_by': ['day']}, store)['groups'] == 183   # every production day, 1 Jan to 14 Sep
+    for grain in ('week', 'month', 'period'):
+        with pytest.raises(S.SemanticError, match='ends on a part'):
+            S.validate({**args, 'group_by': [grain]}, store)
 
 
 def test_stops_by_reason_match_the_hand_written_query(store):
