@@ -228,6 +228,7 @@ class Reading:
     unused: list = field(default_factory=list)
     cues: set = field(default_factory=set)
     refusal: str = None
+    pair_refusal: str = None   # a pair of periods said by number that the reading could not place (round 3): never answered alone
     suggestions: list = field(default_factory=list)
     measure: str = None
     window_words: str = ''
@@ -666,6 +667,20 @@ def _read(reading, text, context, store, mdl):
     if numbered is not None and not getattr(numbered, 'previous_beside', False):   # "compare P2 to P1": parse_request decides
         reading.cues.add('unread window')   # "top operator reasons P1": never the selected period (item 3; parse_request refuses first)
         raise Refused(str(numbered))
+    if numbered is not None:
+        # the selected period and the one just before it, said by their numbers ("top operator reasons P2 vs P1", "... P1 vs P2"): the
+        # selected period against the one before (compare=previous), never the selected period alone with "P1" read as a period word
+        # (the coordinator's review of PR #186 at 9d12f76, item 1)
+        paired = agent.period_pair_words(lower, context.production_day)
+        if agent._periods_said(agent.read_period_numbers(paired)):
+            # a pair these words cannot place ("how does P1 compare with P2", "was P1 worse than P2"): read as before, so the hand route
+            # that carries the period before beside the selected one still answers it (main's answer); the reading itself never answers
+            # the selected period alone (route: pair_refusal; the reviewer's checks of round 3)
+            reading.cues.add('period pair unplaced')
+            reading.pair_refusal = str(numbered)
+        else:
+            reading.cues.add('period before by number')
+            lower = text = paired
     read_words = getattr(context, 'read', None) or {}
     if read_words.get('words'):
         lower = lower.replace(read_words['words'], agent.READ_AS[read_words['period']])
@@ -2658,10 +2673,18 @@ def route(text, context, store, request, refused):
         if refused is not None and str(refused).startswith(reading.refusal):
             return None
         raise ValueError(refusal_text(reading))
+    if 'period before by number' in reading.cues and reading.complete and request is not None and request.get('intent') == 'period_review' \
+            and reading.measure in DOWNTIME_FAMILY:
+        # "worst downtime reasons P2 compared with P1": the hand route's downtime review of the selected period, which prints the one
+        # before, stands as on main (the coordinator's review of PR #186 at 9d12f76, item 1); a ranking of another measure ("top 5 reasons
+        # by stops P2 vs P1") is the reading's, with the period before beside it (the reviewer's check of round 3)
+        return None
     if reading.complete:
         if refused is not None and stands(refused, reading):
             return None   # a domain reason refused it: the refusal stands
         if refused is not None or request is None or not covers(request, reading, context, store):
+            if reading.pair_refusal:
+                raise ValueError(reading.pair_refusal)   # it would answer the selected period alone, the one before dropped (round 3)
             return request_of(reading)
         return None
     if reading.refusal is None:

@@ -345,6 +345,13 @@ class Model:
                 for k, v in months.items()):
             raise ValueError('semantic model: a month said short maps lower-case text to the name of a month')
         self.short_months = dict(months)
+        # ... and a word said short that is a window only after this, last or next ("last mo"; "downtime on mo" is none: the
+        # coordinator's review of PR #186 at 9d12f76, item 2)
+        relative = (self.spec['windows'].get('shorthand') or {}).get('relative', {})
+        if not isinstance(relative, dict) or not all(isinstance(k, str) and k == k.lower().strip() and k and v in ('week', 'month', 'period')
+                                                     for k, v in relative.items()):
+            raise ValueError('semantic model: a window word said short after this, last or next maps lower-case text to week, month or period')
+        self.relative_shorthand = dict(relative)
         future = (self.spec['windows'].get('future') or {}).get('words', [])
         if not all(isinstance(w, str) and w == w.lower().strip() and w for w in future):
             raise ValueError('semantic model: a window after the selected day is lower-case text')
@@ -1597,7 +1604,9 @@ def model_markdown(text=None):
     if windows.get('shorthand'):
         out += ['', '### Said short', '', windows['shorthand']['about'], '', '| Said | Read as |', '| --- | --- |']
         out += [f'| {_cell(said)} | {_cell(reads)} |' for said, reads in windows['shorthand']['words'].items()]
-        out += [f'| {_cell(said)} (beside a window word or a year) | {_cell(reads)} |' for said, reads in windows['shorthand'].get('months', {}).items()]
+        out += [f'| {_cell(said)} (after a word that leads a window, or before a year; never beside a day\'s number) | {_cell(reads)} |'
+                for said, reads in windows['shorthand'].get('months', {}).items()]
+        out += [f'| {_cell(said)} (after this, last or next) | {_cell(reads)} |' for said, reads in windows['shorthand'].get('relative', {}).items()]
     if windows.get('future'):
         out += ['', '### After the selected day', '', windows['future']['about'], '',
                 'Refused: ' + _cell(', '.join(f'"{w}"' for w in windows['future']['words'])) + '.']

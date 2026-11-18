@@ -497,10 +497,12 @@ def test_window_words_said_short_are_model_entries():
     shorten; "next week" and "next month" are its `windows.future`, refused. Checked when the model loads."""
     from investigator import agent
     model = S.model()
-    assert {'wk': 'week', 'mo': 'month', 'sept': 'september', 'ptd': 'period to date', 'q-3': 'q3', '3q': 'q3'}.items() <= model.shorthand.items()
-    assert {'aug': 'august', 'dec': 'december', 'jan': 'january'}.items() <= model.short_months.items()
-    # ... a month said short only where a window stands (the reviewer's re-check: "the dec in speed" was December's speed)
-    assert agent.read_shorthand('downtime in aug, since 1 jan, dec 2025') == 'downtime in august, since 1 january, december 2025'
+    assert {'wk': 'week', 'ptd': 'period to date', 'q-3': 'q3', '3q': 'q3'}.items() <= model.shorthand.items()
+    assert {'aug': 'august', 'dec': 'december', 'jan': 'january', 'sep': 'september', 'sept': 'september'}.items() <= model.short_months.items()
+    assert model.relative_shorthand == {'mo': 'month'} and 'mo' not in model.shorthand and 'sept' not in model.shorthand   # round 3, item 2
+    # ... a month said short only where a window stands (the reviewer's re-check: "the dec in speed" was December's speed), never beside
+    # a day's number (round 3, item 2: "since 1 Jan" is a span from a named date)
+    assert agent.read_shorthand('downtime in aug, since 1 jan, dec 2025') == 'downtime in august, since 1 jan, december 2025'
     said = 'what caused the dec in speed, did trim inc or dec, the current apr'
     assert agent.read_shorthand(said) == said
     assert {'next week', 'next month'} <= set(model.future)
@@ -558,7 +560,7 @@ def test_a_numbered_period_is_the_selected_one_or_refused_naming_it(store, quest
     """Item 3: a 4-4-5 period said by its number answers only when it holds the selected day (P2 on 14 Sep 2026), on every route; the
     hand route ("downtime P1") answered P2 on main too."""
     context = Context(DAY, 2, scope=scope, period='day')
-    with pytest.raises(ValueError, match=r"^'p1[0-3]?' is not|^'p[0-9]+' is not"):
+    with pytest.raises(ValueError, match=r"^'p1[0-3]?' is not|^'p[0-9]+' is not|^'p2' and 'p9' are two windows"):
         route(question, context, store.production_days, store)
     for kept in ('top operator reasons P2', 'how many stops in P2', 'downtime period 2', 'compare P2 to P1', 'trim in P2 vs P1'):
         request, _ = route(kept, context, store.production_days, store)
@@ -606,8 +608,10 @@ def test_a_long_ranking_is_bounded_for_the_planner_never_on_the_card(store, ques
 def test_a_numbered_period_offers_only_a_question_the_router_answers(store):
     """The reviewer's check of round 2: "downtime in P9 2026" offered 'downtime this period 2026', itself refused; "P1 vs P2" two windows."""
     context = Context(DAY, 2, scope='shift', period='day')
-    for question in ('downtime in P9 2026', 'downtime P9 vs P2', 'downtime P1-P3', 'downtime P2 vs P9'):
-        with pytest.raises(ValueError, match=r"Set the day control to a day in P\d\.$"):
+    with pytest.raises(ValueError, match=r"Set the day control to a day in P9\.$"):
+        route('downtime in P9 2026', context, store.production_days, store)
+    for question in ('downtime P9 vs P2', 'downtime P1-P3', 'downtime P2 vs P9'):   # two windows (round 3, item 1), never one offered
+        with pytest.raises(ValueError, match=r"^'p\d' and 'p\d' are two windows: .*Ask about one period at a time, setting the day control to a day in it\.$"):
             route(question, context, store.production_days, store)
     with pytest.raises(ValueError, match=r"Ask 'downtime last period', or set the day control to a day in P1\.$"):
         route('downtime P1', context, store.production_days, store)
@@ -619,3 +623,129 @@ def test_a_window_after_the_selected_day_is_refused_on_every_route(store, questi
     """Item 5 and the reviewer's check of it: the model's windows.future, and "next" with a count."""
     with pytest.raises(ValueError, match=r"is after the selected day: a question is answered up to the selected day"):
         route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+
+
+# ---- The coordinator's review of PR #186 at 9d12f76 (round 3): two regressions against main, regressions only
+
+@pytest.mark.parametrize('question', ['top operator reasons P2 vs P1', 'top operator reasons P1 vs P2', 'top operator reasons P2 versus P1',
+                                      'top operator reasons this period vs P1', 'top 3 maintenance reasons P2 vs P1', 'biggest problems P2 vs P1',
+                                      'top operator reasons in P2 vs P1', 'top operator reasons fiscal period 2 vs fiscal period 1'])
+@pytest.mark.parametrize('scope', ['shift', 'day'])
+def test_a_ranking_of_the_selected_period_against_the_one_before_by_number_compares_them(store, question, scope):
+    """Item 1: the period before said by its number beside the selected one is compare=previous, never the selected period alone with
+    "P1" read as a period word (9d12f76 answered P2's 198.07 min with compare=None; main refused)."""
+    request, _ = route(question, Context(DAY, 2, scope=scope, period='day'), store.production_days, store)
+    assert request['intent'] == 'semantic' and request['plan'][0]['arguments']['window']['period'] == 'fiscal'
+    assert request['plan'][0]['arguments'].get('compare') == 'previous'
+
+
+@pytest.mark.parametrize('question', ['worst downtime reasons P2 compared with P1', 'worst downtime reasons P2 vs P1', 'downtime P2 vs P1'])
+def test_the_review_of_the_selected_period_against_the_one_before_stands_as_on_main(store, question):
+    """Item 1: where main gave the downtime review of P2 (which prints P1 beside it), the review stands."""
+    request, _ = route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+    assert request['intent'] == 'period_review' and request['plan'][0]['arguments']['window'] == {'period': 'fiscal', 'anchor': DAY}
+
+
+@pytest.mark.parametrize('question, said', [('top operator reasons P2 vs P9', "'p2' and 'p9' are two windows"),
+                                            ('top operator reasons P1 vs P9', "'p1' and 'p9' are two windows"),
+                                            ('top operator reasons P3 vs P2', "'p3' and 'p2' are two windows"),
+                                            ('top operator reasons this period vs P9', "'this period' and 'p9' are two windows"),
+                                            ('top operator reasons P2 vs P1 vs P9', "'p2', 'p1' and 'p9' are three windows"),
+                                            ('downtime P1 vs P9', "'p1' and 'p9' are two windows")])
+def test_any_other_pair_of_periods_is_two_windows_refused_by_name(store, question, said):
+    """Item 1: a pair that is not the selected period and the one before it is refused naming the periods, never one of them answered."""
+    with pytest.raises(ValueError, match='^' + re.escape(said)):
+        route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+
+
+def test_the_pair_said_in_words_is_the_selected_period_first():
+    """Item 1: period_pair_words reads the pair the way the model reads a comparison, the selected period first."""
+    from investigator import agent
+    for said in ('top operator reasons p2 vs p1', 'top operator reasons p1 vs p2', 'top operator reasons this period vs p1',
+                 'top operator reasons in p2 vs in p1'):
+        assert agent.period_pair_words(said, DAY) == 'top operator reasons this period vs last period', said
+    for said in ('top operator reasons p2 vs p9', 'downtime p1', 'top operator reasons p2 vs p1 vs p9', 'downtime p2 and p1'):
+        assert agent.period_pair_words(said, DAY) == said
+
+
+@pytest.mark.parametrize('said', ['the week of 7 sep', 'on 10 sep', 'sep 10', 'sept 10th', '3 aug', 'from 1 sep to 11 sep', 'between 3 aug and 7 aug',
+                                  'w/e 11 sep', 'mid sep', 'early sept', 'end of aug', 'the first week of aug', 'for sep 10', 'in aug 3rd',
+                                  '10 sep 2026', 'downtime on mo', 'downtime mo'])
+def test_a_short_month_beside_a_day_number_is_never_read_as_the_month(said):
+    """Item 2: a month said short is read only after a word that leads a window or before a year, never beside a day's number (a
+    named date, #188's), and "mo" only after this, last or next."""
+    from investigator import agent
+    assert agent.read_shorthand(said) == said
+
+
+@pytest.mark.parametrize('said, read', [('in sep', 'in september'), ('for sept', 'for september'), ('during aug', 'during august'),
+                                        ('sep 2026', 'september 2026'), ('in sept. 2026', 'in september. 2026'), ('last mo', 'last month'),
+                                        ('this mo', 'this month'), ('next mo', 'next month'), ('compare aug to jul', 'compare august to july')])
+def test_a_short_month_after_a_lead_or_before_a_year_is_still_the_month(said, read):
+    """Item 2: what round 2 read stays read."""
+    from investigator import agent
+    assert agent.read_shorthand(said) == read
+
+
+@pytest.mark.parametrize('question', ['trim the week of 3 August', 'trim on 3 August', 'trim August 3', 'trim 3rd of August'])
+def test_a_named_date_is_never_the_whole_month_on_the_waste_route(store, question):
+    """Item 2: the waste breakdown of a month named is that month, but a day said beside the month is a named date: the window main read,
+    never the whole month (9d12f76 answered August's breakdown for "trim the week of 3 August")."""
+    try:
+        request, _ = route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+    except ValueError:
+        return   # refused: no worse than main
+    assert all((s['arguments'].get('window') or {}).get('anchor') != '2026-08-01' for s in request['plan'])
+
+
+@pytest.mark.parametrize('question', ['compare P2 and P1', 'how do P2 and P1 compare', 'compare downtime in P2 and P1', 'P1 vs the current period',
+                                      'downtime P1 against the current period', 'compare P2, P1', 'compare downtime P2 & P1',
+                                      'compare top operator reasons P2 and P1', 'was P1 worse than P2', 'downtime P1 than P2',
+                                      'msf P1 or P2 compared', 'top operator reasons up to P2 from P1'])
+def test_a_pair_of_periods_never_recurses(store, question):
+    """The reviewer's check of round 3: a pair the words could not place asked the same refusal again, without end (a RecursionError,
+    500 on the page). Each answers or is refused; none raises anything else."""
+    try:
+        route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+    except ValueError:
+        pass
+
+
+@pytest.mark.parametrize('question', ['top operator reasons from P1 to P2', 'top operator reasons P1 to P2', 'top operator reasons between P1 and P2',
+                                      'top operator reasons P1 through P2'])
+def test_a_span_of_periods_is_two_windows(store, question):
+    """The reviewer's check of round 3: "from P1 to P2" is a span, never P2 against P1; "to" compares only with "compare" said."""
+    with pytest.raises(ValueError, match=r"^'p[12]' and 'p[12]' are two windows"):
+        route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+
+
+@pytest.mark.parametrize('said, read', [('msf sept vs aug', 'msf september vs august'), ('sept compared to aug', 'september compared to august'),
+                                        ('trim for aug and sep', 'trim for august and september'), ('aug vs jul', 'august vs july'),
+                                        ('downtime in aug or sep', 'downtime in august or september'),
+                                        ('downtime for the month of aug', 'downtime for the month of august'),
+                                        ('did trim inc or dec', 'did trim inc or dec'), ('between 3 aug and 7 aug', 'between 3 aug and 7 aug'),
+                                        ('sep and august 3', 'sep and august 3')])
+def test_two_months_said_short_read_as_the_pair_said_in_full(said, read):
+    """The reviewer's check of round 3: a month said short beside a month read ("Sept vs Aug") is read too, never the one with the lead
+    alone; neither beside a day's number."""
+    from investigator import agent
+    assert agent.read_shorthand(said) == read
+
+
+def test_a_shift_or_a_ranking_number_before_a_month_is_no_named_date():
+    """The reviewer's check of round 3: "waste breakdown shift 2 August" is August's, as at 9d12f76."""
+    from investigator import agent
+    assert not agent.named_date('waste breakdown shift 2 august') and not agent.named_date('trim top 3 august')
+    assert agent.named_date('trim the week of 3 august') and agent.named_date('trim august 3rd')
+
+
+@pytest.mark.parametrize('question, intent', [('how does P1 compare with P2', 'period_compare'), ('how did P1 go versus P2', 'period_compare'),
+                                              ('how did P1 stack up against P2', 'period_compare'),
+                                              ('how did downtime in P1 compare with P2', 'period_review'),
+                                              ('how did trim in P1 compare to P2', 'period_waste')])
+def test_a_pair_the_words_cannot_place_keeps_the_hand_route(store, question, intent):
+    """The reviewer's re-check of round 3: a pair that is not said as "this period vs last period" in the words ("P1 ... compare with
+    P2") keeps the hand route that carries the period before beside the selected one, as on main, never a refusal."""
+    request, _ = route(question, Context(DAY, 2, scope='shift', period='day'), store.production_days, store)
+    assert request['intent'] == intent and request['plan'][0]['arguments'].get('window', {}).get('period') == 'fiscal'
+

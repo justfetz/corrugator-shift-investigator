@@ -708,13 +708,10 @@ def semantic_failures(question, url):
 def as_read(question, url):
     """`question` with the words the router reads otherwise read as it reads them (the coordinator's review of PR #186, round 2): each
     window word said short as the words it shortens (the model's `windows.shorthand`: "last wk" is last week, data the harness reads
-    too), and a year beside a month's name consumed when the URL answers that month of that year (`window=YYYY-MM`), never when it
-    answers another year's month."""
-    words = semantic.model().shorthand
-    text = question
-    if words:
-        text = re.sub(r"(?<![\w-])(" + '|'.join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")(?![\w-])",
-                      lambda m: words[m[1].lower()], text, flags=re.I)
+    too; the months said short where a window stands and "mo" after this, last or next, as agent.read_shorthand reads them), and a
+    year beside a month's name consumed when the URL answers that month of that year (`window=YYYY-MM`), never another year's."""
+    from investigator.agent import read_shorthand   # the router's own reading: the months said short and "last mo" too (round 3)
+    text = read_shorthand(question.lower())
     month = url_window(url or '')[1]
     if month:
         names = _MONTHS[3:-1].split('|')

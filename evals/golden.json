@@ -24816,9 +24816,9 @@
    "reviewed_by": "owner-pending",
    "question": "top operator reasons since 1 Jan",
    "expect": {
-    "raises": "^'since 1 january' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
+    "raises": "^'since 1 jan' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date"
    },
-   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span from a date: c7b61dd answered the selected day, 2.15%. Round 2 (the reviewer's check of item 5): 'Jan' is January said short (the model's windows.shorthand), so the refusal names 'since 1 january'."
+   "note": "Issue #185, the coordinator's review of PR #186 at c7b61dd (round 1), item 1: a span from a date: c7b61dd answered the selected day, 2.15%. Round 2 (the reviewer's check of item 5): 'Jan' is January said short (the model's windows.shorthand), so the refusal names 'since 1 january'. Round 3 (the coordinator's review at 9d12f76, item 2): a month said short beside a day's number is never read as the month, so the refusal names 'since 1 jan' as said."
   },
   {
    "id": "top-n-since-a-month-refused",
@@ -27360,9 +27360,9 @@
    "reviewed_by": "owner-pending",
    "question": "downtime P2 vs P9",
    "expect": {
-    "raises": "^'p9' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Set the day control to a day in P9\\.$"
+    "raises": "^'p2' and 'p9' are two windows: a question reads one window, or one window against the one just before it, and a 4-4-5 period said by its number is read only as the one that holds the selected day, P2, 31 Aug–27 Sep 2026 \\(the one before it is P1\\)\\. Ask about one period at a time, setting the day control to a day in it\\.$"
    },
-   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: every P-number said is checked, not only the first: 69d8a15 and main answered P2's review, 3.25%, with P9 neither read nor refused; no question is offered, since two periods are said."
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's check of this round: every P-number said is checked, not only the first: 69d8a15 and main answered P2's review, 3.25%, with P9 neither read nor refused; no question is offered, since two periods are said. Round 3 (the coordinator's review at 9d12f76, item 1): a pair of periods that is not the selected one and the one before it is two windows, refused naming both."
   },
   {
    "id": "top-n-a-period-number-in-words-refused",
@@ -27751,9 +27751,9 @@
    "reviewed_by": "owner-pending",
    "question": "compare P2 to P9",
    "expect": {
-    "raises": "^'p9' is not the 4-4-5 period that holds the selected day, P2, 31 Aug–27 Sep 2026: a period said by its number is read only as that one\\. Set the day control to a day in P9\\.$"
+    "raises": "^'p2' and 'p9' are two windows: a question reads one window, or one window against the one just before it, and a 4-4-5 period said by its number is read only as the one that holds the selected day, P2, 31 Aug–27 Sep 2026 \\(the one before it is P1\\)\\. Ask about one period at a time, setting the day control to a day in it\\.$"
    },
-   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's re-check of this round: a period compared that is not the one before: 69d8a15 and main answered P2 against P1, never P9."
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 3: the reviewer subagent's re-check of this round: a period compared that is not the one before: 69d8a15 and main answered P2 against P1, never P9. Round 3 (the coordinator's review at 9d12f76, item 1): a pair of periods that is not the selected one and the one before it is two windows, refused naming both."
   },
   {
    "id": "top-n-a-trend-keeps-its-own-window-words",
@@ -27889,6 +27889,634 @@
     "raises": "^'next 2 shifts' is after the selected day: a question is answered up to the selected day, and the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\.$"
    },
    "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: the reviewer subagent's re-check of this round: 69d8a15 and main answered the selected day's shift downtime, 3.95%."
+  },
+  {
+   "id": "top-n-p2-vs-p1-ranking-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons P2 vs P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=period&by=reason&rank=most&top=5&kind=Operator&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime, stop kind Operator this period: \\*\\*198\\.07 min\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: 9d12f76 answered P2 alone, 198.07 min with compare=None, and dropped P1 without saying so; main refused. The period before said by its number is compare=previous."
+  },
+  {
+   "id": "top-n-p1-vs-p2-ranking-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons P1 vs P2",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=period&by=reason&rank=most&top=5&kind=Operator&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime, stop kind Operator this period: \\*\\*198\\.07 min\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: the period before said first is the same pair; 9d12f76 answered P2 alone; main refused."
+  },
+  {
+   "id": "top-n-p2-versus-p1-ranking-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons P2 versus P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=period&by=reason&rank=most&top=5&kind=Operator&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime, stop kind Operator this period: \\*\\*198\\.07 min\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: 9d12f76 answered P2 alone; main refused."
+  },
+  {
+   "id": "top-n-this-period-vs-p1-ranking-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons this period vs P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=period&by=reason&rank=most&top=5&kind=Operator&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime, stop kind Operator this period: \\*\\*198\\.07 min\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: 9d12f76 answered P2 alone; main refused."
+  },
+  {
+   "id": "top-n-top-3-maintenance-p2-vs-p1-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 3 maintenance reasons P2 vs P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=period&by=reason&rank=most&top=3&kind=Maintenance&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Knife / slitter jam had the most downtime, stop kind Maintenance this period: \\*\\*186\\.40 min\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: 9d12f76 answered P2's top 3 alone; main refused."
+  },
+  {
+   "id": "top-n-biggest-problems-p2-vs-p1-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "biggest problems P2 vs P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=period&by=reason&rank=most&top=5&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime this period, leaving out Planned maintenance: \\*\\*198\\.07 min\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: 9d12f76 answered P2 alone; main refused."
+  },
+  {
+   "id": "top-n-worst-reasons-p2-compared-with-p1-keeps-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "worst downtime reasons P2 compared with P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.25%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: 9d12f76 gave P2's ranking with no period before; main gave the downtime review of P2, which prints P1, and it is kept."
+  },
+  {
+   "id": "top-n-p2-vs-p9-two-periods-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons P2 vs P9",
+   "expect": {
+    "raises": "^'p2' and 'p9' are two windows"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: a pair of periods that is not the selected one and the one before it is two windows, refused naming them; 9d12f76 refused naming P9 alone, as though one period were asked."
+  },
+  {
+   "id": "top-n-p2-vs-p1-vs-p9-three-periods-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons P2 vs P1 vs P9",
+   "expect": {
+    "raises": "^'p2', 'p1' and 'p9' are three windows"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: 9d12f76 answered P2 alone (P1 read as the period before beside it, P9 dropped); main refused."
+  },
+  {
+   "id": "top-n-downtime-p1-vs-p9-two-periods-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime P1 vs P9",
+   "expect": {
+    "raises": "^'p1' and 'p9' are two windows"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 1: two periods, neither the selected one: main answered P2's review, 9d12f76 refused naming P1 alone."
+  },
+  {
+   "id": "top-n-week-of-7-sep-ranking-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons the week of 7 Sep",
+   "expect": {
+    "raises": "^'sep' is not a word the semantic model reads"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: a named date ('the week of 7 Sep') is #188's: 9d12f76 read '7 Sep' as September and answered September's KPI tiles, 2,620.5 MSF/day on shift 2; main refused."
+  },
+  {
+   "id": "top-n-top-3-maintenance-week-of-7-sep-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 3 maintenance reasons the week of 7 Sep",
+   "expect": {
+    "raises": "^'sep' is not a word the semantic model reads"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 9d12f76 answered September's KPI tiles; main refused."
+  },
+  {
+   "id": "top-n-top-3-maintenance-week-of-7-aug-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 3 maintenance reasons the week of 7 Aug",
+   "expect": {
+    "raises": "^'aug' is not a word the semantic model reads"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 9d12f76 answered August's KPI tiles; main refused."
+  },
+  {
+   "id": "top-n-biggest-problems-week-of-7-sep-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "biggest problems the week of 7 Sep",
+   "expect": {
+    "raises": "^'sep' is not a word the semantic model reads"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 9d12f76 answered September's KPI tiles; main refused."
+  },
+  {
+   "id": "top-n-biggest-problems-week-of-7-aug-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "biggest problems the week of 7 Aug",
+   "expect": {
+    "raises": "^'aug' is not a word the semantic model reads"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 9d12f76 answered August's KPI tiles; main refused."
+  },
+  {
+   "id": "top-n-trim-on-10-sep-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim on 10 Sep",
+   "expect": {
+    "raises": "^Offline mode supports shift performance, downtime, speed, quality and comparisons"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 9d12f76 answered September's waste breakdown, 3.49%; main refused. A named date is #188's."
+  },
+  {
+   "id": "top-n-trim-sep-10-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim Sep 10",
+   "expect": {
+    "raises": "^Offline mode supports shift performance, downtime, speed, quality and comparisons"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: a short month before a day's number is a named date: 9d12f76 answered September's waste breakdown, 3.49%; main refused."
+  },
+  {
+   "id": "top-n-trim-3-aug-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim 3 Aug",
+   "expect": {
+    "raises": "^Offline mode supports shift performance, downtime, speed, quality and comparisons"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 9d12f76 answered August's waste breakdown, 3.12%; main refused."
+  },
+  {
+   "id": "top-n-trim-from-1-sep-to-11-sep-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim from 1 Sep to 11 Sep",
+   "expect": {
+    "raises": "^Offline mode supports shift performance, downtime, speed, quality and comparisons"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: a span of named dates: 9d12f76 answered September's waste breakdown, 3.49%; main refused."
+  },
+  {
+   "id": "top-n-trim-mid-sep-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim mid Sep",
+   "expect": {
+    "raises": "^Offline mode supports shift performance, downtime, speed, quality and comparisons"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: part of a month: 9d12f76 answered September's waste breakdown, 3.49%; main refused."
+  },
+  {
+   "id": "top-n-trim-end-of-aug-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim end of Aug",
+   "expect": {
+    "raises": "^Offline mode supports shift performance, downtime, speed, quality and comparisons"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: part of a month ('of' leads no window): 9d12f76 answered August's waste breakdown, 3.12%; main refused."
+  },
+  {
+   "id": "top-n-cost-the-most-on-10-sep-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "which reason cost us the most on 10 Sep",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_day_dollars",
+      "arguments": {}
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*\\$2,148\\*\\*"
+    ],
+    "sections_not_match": "\\$66,791|this month|September"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 9d12f76 read '10 Sep' as September and answered its levers, $66,791; main's answer, the selected day's $2,148, is kept. The named date itself is #188's. This case guards only that a named date never becomes the whole month: the answer is the selected day's, as on main, and #188, which reads a named date, replaces it with 10 Sep's."
+  },
+  {
+   "id": "top-n-on-mo-is-no-month",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime on mo",
+   "day": "2026-09-16",
+   "expect": {
+    "url": "/corr/1/day/2026-09-16?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-16"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2\\.17%\\*\\*"
+    ],
+    "sections_not_match": "^\\*\\*3\\.24%|this month"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), item 2: 'mo' is a month only after this, last or next: 9d12f76, asked on a Wednesday, answered September; main's answer, the selected day, is kept. This case guards only that 'on mo' is never the month: the answer is the selected day's, as on main, which does not read 'mo' either."
+  },
+  {
+   "id": "top-n-stops-ranking-p2-vs-p1-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top 5 reasons by stops P2 vs P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=period&by=reason&rank=most&top=5&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Missed splice had the most stops this period: \\*\\*133 stops\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's check of the fix: a ranking of another measure than the review's leads with it, P1 beside: main and 9d12f76 ranked P2's stops alone (133 stops, compare=None); a draft of this round gave the downtime review."
+  },
+  {
+   "id": "top-n-p2-and-p1-ranking-compares-the-period-before",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "compare top operator reasons P2 and P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&window=period&by=reason&rank=most&top=5&kind=Operator&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^Missed splice had the most downtime, stop kind Operator this period: \\*\\*198\\.07 min\\*\\*",
+     "\\bprevious \\d"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's check of the fix: the pair joined by 'and' and compared: main and 9d12f76 refused; a draft of this round recursed without end (a 500)."
+  },
+  {
+   "id": "top-n-compare-p2-and-p1-keeps-the-kpi-comparison",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "compare P2 and P1",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=kpis&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*51,479\\.0 MSF\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's check of the fix: main's and 9d12f76's KPI tiles of P2 with P1 beside, kept; a draft of this round recursed without end (a 500)."
+  },
+  {
+   "id": "top-n-from-p1-to-p2-span-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top operator reasons from P1 to P2",
+   "expect": {
+    "raises": "^'p1' and 'p2' are two windows"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's check of the fix: a span of periods is two windows, never P2 against P1: main and 9d12f76 refused; a draft of this round answered P2 with compare=prev."
+  },
+  {
+   "id": "top-n-aug-vs-jul-said-short-compares-the-months",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Aug vs Jul",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=kpis&window=2026-08&compare=2026-07",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "compare_periods",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*2,518\\.3 MSF/day\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's check of the fix: two months said short and compared read as the pair said in full ('August vs July'): 9d12f76 answered July alone, main the day's shift speed comparison."
+  },
+  {
+   "id": "top-n-msf-sept-vs-aug-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf Sept vs Aug",
+   "expect": {
+    "raises": "^Offline mode answers one quantity at a time"
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's check of the fix: as main and 9d12f76, and as 'msf September vs August'; a draft of this round read only 'Aug' and answered August's MSF."
+  },
+  {
+   "id": "top-n-shift-2-august-waste-is-august",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "waste breakdown shift 2 August",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=waste&window=2026-08",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.13%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's check of the fix: a shift's number before the month is no named date: August's breakdown on shift 2, as at 9d12f76 (main answered September's); a draft of this round answered September's."
+  },
+  {
+   "id": "top-n-p1-compare-with-p2-keeps-the-kpi-comparison",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how does P1 compare with P2",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=kpis&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*51,479\\.0 MSF\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's re-check of the fix: a pair the words cannot place as 'this period vs last period' keeps the hand route's KPI tiles of P2 with P1 beside, as main and 9d12f76 answered; a draft of this round refused it."
+  },
+  {
+   "id": "top-n-trim-in-p1-compare-to-p2-keeps-the-waste-breakdown",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how did trim in P1 compare to P2",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=period",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*3\\.45%\\*\\*"
+    ]
+   },
+   "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's re-check of the fix: the waste breakdown of P2 with P1 beside, as main and 9d12f76 answered; a draft of this round refused it."
   }
  ]
 }
