@@ -23773,14 +23773,75 @@
    }
   },
   {
+   "id": "examples-pounds-of-peel-answers-peel-lb",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "pounds of peel this week",
+   "note": "Issue #187: the semantic model weighs peel at the basis weight each paper grade's board recipe gives it, so 'pounds of peel' asks a measure it holds: this week's peel_lb, in lb, over all shifts (a roll carries no shift). Found by the coordinator's review of e545dfb, item 2: ?measure=semantic&m=peel_lb&window=week answers it in pounds at a public address while the question is refused.",
+   "known_defect": "Issue #172: the offline router refuses it with its weight refusal ('The router does not read tons or pounds', golden examples-pounds-of-peel-refused-naming-the-recipes, which pins that wording until then); the read-back planner reads it as peel_lb.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=peel_lb&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "peel_lb",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Peel by weight this week: \\*\\*[0-9][0-9,.]* lb\\*\\*",
+     "^Read as: peel by weight in lb, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-weight-of-paper-consumed-answers-paper-consumed-lb",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "weight of paper consumed this month",
+   "note": "Issue #187: the question names a weight, and the semantic model holds the paper consumed by weight (paper_consumed_lb: the paper fed, the peel and the core, each paper grade at its basis weight), so the answer leads with pounds, never with MSF, which is area. Found by the coordinator's review of e545dfb, item 2: on main and on e545dfb it answers MSF.",
+   "known_defect": "Issue #172: the offline router reads 'paper consumed' as the rollstock answer and leads with MSF of paper consumed (get_rollstock), an area where the question asks a weight; the read-back planner reads it as paper_consumed_lb.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=paper_consumed_lb&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "paper_consumed_lb",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Paper consumed by weight this month: \\*\\*[0-9][0-9,.]* lb\\*\\*",
+     "^Read as: paper consumed by weight in lb, September 2026 \\(2026-09-01 to 2026-09-30\\), all shifts\\."
+    ],
+    "sections_not_match": "MSF\\*\\* of paper consumed"
+   }
+  },
+  {
    "id": "examples-pounds-of-peel-refused-naming-the-recipes",
    "type": "refusal",
    "mode": "offline",
    "reviewed_by": "owner-pending",
    "question": "pounds of peel this week",
-   "note": "Issue #187: the semantic model reads peel and core by weight, each paper grade at the basis weight its board recipe gives it, so the hand router's weight refusal still refuses but never says no basis weight is recorded (on 91e8b33 it said 'The records hold no weights: no basis weight is recorded'); the coordinator's review of 91e8b33, item 2.",
+   "note": "Issue #187: the semantic model reads peel and core by weight, each paper grade at the basis weight its board recipe gives it, so the hand router's weight refusal still refuses but never says no basis weight is recorded (on 91e8b33 it said 'The records hold no weights: no basis weight is recorded'); the coordinator's review of 91e8b33, item 2. It says the router does not read weights, points to the semantic model's peel_lb, and leaves only the cost to #181: the model answers peel, core and paper consumed in pounds (on e545dfb it said 'Tons and pounds are not counted here … paper by weight and its cost wait on issue #181'); the coordinator's review of e545dfb, item 1. The router's reading of this question as peel_lb is #172's, golden examples-pounds-of-peel-answers-peel-lb (a known defect); when it lands, this case retires.",
    "expect": {
-    "raises": "^Tons and pounds are not counted here: the board recipes give each paper grade its basis weight"
+    "raises": "^The router does not read tons or pounds: the semantic model reads peel, core and paper consumed by weight, each paper grade at the basis weight its board recipe gives it \\(measure=semantic&m=peel_lb; m=core_lb and m=paper_consumed_lb likewise\\); only their cost waits on issue #181\\."
    }
   },
   {
@@ -23807,9 +23868,9 @@
     "sections_match": [
      "^\\*\\*[0-9][0-9,.]* MSF\\*\\* of paper consumed",
      "this answer is area\\.$",
-     "^The board recipes give each paper grade its basis weight, and peel and core are read by weight"
+     "^The board recipes give each paper grade its basis weight, and the semantic model reads the paper consumed, the peel and the core by weight from it; only their cost waits on pricing paper by weight\\.$"
     ],
-    "sections_not_match": "no basis weight"
+    "sections_not_match": "no basis weight|tons of paper"
    }
   }
  ]

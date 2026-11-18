@@ -306,18 +306,32 @@ def test_the_per_run_shortfall_is_never_labelled_as_baseline_less_speed(store):
 
 def test_no_answer_says_the_records_hold_no_basis_weight(store):
     """The coordinator's review of 91e8b33, item 2: peel and core are read by weight, each paper grade at the basis weight the board
-    recipes give it, so no answer may say there is no basis weight. The paper-consumed answer says it stays in area and that pricing
-    paper by weight waits on its own issue; the hand router's weight refusal still refuses, naming where the weights come from."""
+    recipes give it, so no answer may say there is no basis weight. The paper-consumed answer says it stays in area; the hand
+    router's weight refusal still refuses, naming where the weights come from.
+
+    The coordinator's review of e545dfb, item 1: the semantic model answers peel, core and the paper consumed in pounds at a public
+    address (peel_lb, core_lb, paper_consumed_lb), so no text may say that paper by weight, or tons of paper, waits on issue #181:
+    only the cost does. The refusal says the router does not read weights and points to m=peel_lb, an address that answers in lb."""
+    import re
     from investigator.agent import Context, route
     from investigator.record_store import RecordStore
+    weighed = {name: semantic.model().measures[name] for name in ('peel_lb', 'core_lb', 'paper_consumed_lb')}
+    assert all(m['unit'] == 'lb' for m in weighed.values())   # the measures the wording points to answer in pounds
     note = store.get_rollstock({'period': 'fiscal', 'anchor': '2026-08-03'})['msf_note']
-    assert 'no basis weight' not in note and 'board recipes' in note and 'area' in note
-    assert 'no basis weight' not in RecordStore.get_rollstock.__doc__ and 'board recipes' in RecordStore.get_rollstock.__doc__
+    for text in (note, RecordStore.get_rollstock.__doc__):
+        flat = ' '.join(text.split())
+        assert 'no basis weight' not in flat and 'board recipes' in flat and 'area' in flat, flat
+        assert 'semantic model reads the paper consumed, the peel and the core by weight' in flat, flat
+        assert 'only their cost waits on pricing paper by weight' in flat and not re.search(r'tons of paper', flat), flat
     for question in ('pounds of peel this week', 'how many tons of paper did we use this week'):
         with pytest.raises(ValueError) as refused:
             route(question, Context(ANCHORS[0], 2, scope='shift', period='day'), store.production_days, store)
         message = str(refused.value)
-        assert 'no basis weight' not in message and 'no weights' not in message and 'board recipes' in message, message
+        assert 'no basis weight' not in message and 'no weights' not in message and 'board recipe' in message, message
+        assert message.startswith('The router does not read tons or pounds: the semantic model reads peel, core and paper consumed '
+                                  'by weight'), message
+        assert 'm=peel_lb' in message and 'only their cost waits on issue #181.' in message, message
+        assert 'not counted' not in message and not re.search(r'paper by weight[^.;]*wait', message), message
 
 
 def test_a_compared_window_is_held_at_the_querys_own_baselines(store):
