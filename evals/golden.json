@@ -23516,6 +23516,362 @@
    "expect": {
     "raises": "Selected shift only"
    }
+  },
+  {
+   "id": "examples-peel-pct-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "peel % this week",
+   "note": "Issue #187: the roll entity's peel by weight, read by the model's own words; before the fix its answer raised KeyError 'roll' (no where-to-look for rolls), the reviewer of the PR found.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=peel_pct&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "peel_pct",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Peel of paper consumed this week: \\*\\*[0-9][0-9,.]*%\\*\\* of roll stock consumed · (home run|on target|over|flag)",
+     "^Read as: peel of paper consumed in % of roll stock consumed, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-core-pct-this-month",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "core percent this month",
+   "note": "Issue #187: core by weight against the owner's core band, read over all shifts (a roll carries no shift).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=core_pct&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "core_pct",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Core of paper consumed this month: \\*\\*[0-9][0-9,.]*%\\*\\* of roll stock consumed · (home run|on target|over|flag)",
+     "^Read as: core of paper consumed in % of roll stock consumed, September 2026 \\(2026-09-01 to 2026-09-30\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-peel-and-core-pct-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "peel and core % this week",
+   "note": "Issue #187: the owner's 'peel and core, on average', by weight: pounds of peel and core over the pounds of paper consumed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=peel_core_pct&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "peel_core_pct",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Peel and core of paper consumed this week: \\*\\*[0-9][0-9,.]*%\\*\\* of roll stock consumed \\(query 1\\)",
+     "^Read as: peel and core of paper consumed in % of roll stock consumed, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-speed-gap-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed gap by grade this week",
+   "note": "Issue #187: each grade's speed gap in ft/min, its paper runs' feet under the baseline over its running minutes (on main this question answered the grade totals). Labelled as the shortfall on runs under baseline, never as the gap to the baseline: it is not the grade baseline less its speed (the coordinator's review of 91e8b33, item 6).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_gap_fpm&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_gap_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shortfall on runs under baseline this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*",
+     "^Read as: shortfall on runs under baseline in ft/min by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-baseline-speed-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "baseline speed by grade this week",
+   "note": "Issue #187: each grade's speed baseline (targets.json), the tools' own (on main this question answered the trend).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=baseline_speed_fpm&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "baseline_speed_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Grade baseline speed this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*",
+     "^Read as: grade baseline speed in ft/min by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-recoverable-footage-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "recoverable footage by grade this week",
+   "note": "Issue #187: targets.json's speed gap, each paper run under its grade's baseline, summed by grade; never negative. The reviewer of the PR found the first draft netted the runs (a grade could read negative footage).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_gap_ft&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_gap_ft",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Footage recoverable this week: \\*\\*[0-9][0-9,.]* ft\\*\\*",
+     "^Read as: footage recoverable in ft by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-downtime-of-the-clock-by-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime of the clock by grade this week",
+   "note": "Issue #187: each grade's minutes stopped over its own setup clock, the owner's 'downtime % of that grade's time on the machine'.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_clock_pct&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_clock_pct",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Downtime of the setup clock this week: \\*\\*[0-9][0-9,.]*%\\*\\* of setup clock",
+     "^Read as: downtime of the setup clock in % of setup clock by board grade, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-customer-credits-for-bond-and-warp-refused-naming-shipments",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "What are our customer credits for bond and warp?",
+   "note": "Issue #187, the owner's own SLT question (the customer-credits example): the records hold no shipments, so the answer is the customer_credits rule's refusal naming them, with the dry-end rejects offered. Found by PR #189; the coordinator's review of 91e8b33, item 3.",
+   "known_defect": "Issue #172: the offline router reads 'credits for bond and warp' as the waste breakdown and answers side trim % of gross (get_waste_breakdown), a different question; the read-back planner refuses it with the customer_credits rule, naming shipments.",
+   "expect": {
+    "raises": "The records hold no shipments, so no customer credit"
+   }
+  },
+  {
+   "id": "examples-shear-percent-by-machine-is-the-one-corrugator",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "shear percent by machine last week",
+   "note": "Issue #187 (a rewording of the shear-by-machine example): the records hold one corrugator, so by machine is the whole of it: last week's shear % of gross, saying so (the by_machine rule). Found by PR #189; the coordinator's review of 91e8b33, item 3.",
+   "known_defect": "Issue #172: the offline router refuses it with the stop-reason Pareto message ('One quantity is the whole window's: grouped by stop reason, place or kind it is the Pareto'), a reason that is not the question's; the read-back planner reads it as shear_pct over the one corrugator and says the records hold one.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=shear_pct",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "shear_pct",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "sections_match": [
+     "^Shear .*\\*\\*[0-9][0-9,.]*%\\*\\*",
+     "one corrugator"
+    ],
+    "sections_not_match": "Pareto"
+   }
+  },
+  {
+   "id": "examples-pounds-of-peel-answers-peel-lb",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "pounds of peel this week",
+   "note": "Issue #187: the semantic model weighs peel at the basis weight each paper grade's board recipe gives it, so 'pounds of peel' asks a measure it holds: this week's peel_lb, in lb, over all shifts (a roll carries no shift). Found by the coordinator's review of e545dfb, item 2: ?measure=semantic&m=peel_lb&window=week answers it in pounds at a public address while the question is refused.",
+   "known_defect": "Issue #172: the offline router refuses it with its weight refusal ('The router does not read tons or pounds', golden examples-pounds-of-peel-refused-naming-the-recipes, which pins that wording until then); the read-back planner reads it as peel_lb.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=peel_lb&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "peel_lb",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Peel by weight this week: \\*\\*[0-9][0-9,.]* lb\\*\\*",
+     "^Read as: peel by weight in lb, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts\\."
+    ]
+   }
+  },
+  {
+   "id": "examples-weight-of-paper-consumed-answers-paper-consumed-lb",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "weight of paper consumed this month",
+   "note": "Issue #187: the question names a weight, and the semantic model holds the paper consumed by weight (paper_consumed_lb: the paper fed, the peel and the core, each paper grade at its basis weight), so the answer leads with pounds, never with MSF, which is area. Found by the coordinator's review of e545dfb, item 2: on main and on e545dfb it answers MSF.",
+   "known_defect": "Issue #172: the offline router reads 'paper consumed' as the rollstock answer and leads with MSF of paper consumed (get_rollstock), an area where the question asks a weight; the read-back planner reads it as paper_consumed_lb.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=paper_consumed_lb&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "paper_consumed_lb",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Paper consumed by weight this month: \\*\\*[0-9][0-9,.]* lb\\*\\*",
+     "^Read as: paper consumed by weight in lb, September 2026 \\(2026-09-01 to 2026-09-30\\), all shifts\\."
+    ],
+    "sections_not_match": "MSF\\*\\* of paper consumed"
+   }
+  },
+  {
+   "id": "examples-pounds-of-peel-refused-naming-the-recipes",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "pounds of peel this week",
+   "note": "Issue #187: the semantic model reads peel and core by weight, each paper grade at the basis weight its board recipe gives it, so the hand router's weight refusal still refuses but never says no basis weight is recorded (on 91e8b33 it said 'The records hold no weights: no basis weight is recorded'); the coordinator's review of 91e8b33, item 2. It says the router does not read weights, points to the semantic model's peel_lb, and leaves only the cost to #181: the model answers peel, core and paper consumed in pounds (on e545dfb it said 'Tons and pounds are not counted here … paper by weight and its cost wait on issue #181'); the coordinator's review of e545dfb, item 1. The router's reading of this question as peel_lb is #172's, golden examples-pounds-of-peel-answers-peel-lb (a known defect); when it lands, this case retires.",
+   "expect": {
+    "raises": "^The router does not read tons or pounds: the semantic model reads peel, core and paper consumed by weight, each paper grade at the basis weight its board recipe gives it \\(measure=semantic&m=peel_lb; m=core_lb and m=paper_consumed_lb likewise\\); only their cost waits on issue #181\\."
+   }
+  },
+  {
+   "id": "examples-paper-consumed-is-area-never-no-basis-weight",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how much paper did we consume in the previous period?",
+   "note": "Issue #187: the paper consumed is read in area (MSF), and its note says so without saying the records hold no basis weight, which the peel and core answers by weight contradicted (on 91e8b33: 'the records carry no basis weight, so tons and cost are not computed'); the coordinator's review of 91e8b33, item 2.",
+   "expect": {
+    "url": "/corr/1/period/2026-08-03?measure=rollstock",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_rollstock",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-08-03"
+       }
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9][0-9,.]* MSF\\*\\* of paper consumed",
+     "this answer is area\\.$",
+     "^The board recipes give each paper grade its basis weight, and the semantic model reads the paper consumed, the peel and the core by weight from it; only their cost waits on pricing paper by weight\\.$"
+    ],
+    "sections_not_match": "no basis weight|tons of paper"
+   }
   }
  ]
 }

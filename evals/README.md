@@ -436,8 +436,18 @@ and replays through it until it is re-recorded.
 ## Known defects
 
 A case may carry `known_defect`. It is run, shown as `xfail` in the table with
-the defect text, and does not count against the exit status; when it starts
-passing the note says to remove the marker. None is marked today. The last one,
+the defect text, and does not count against the exit status, whether it fails
+by answering where it should refuse, refusing where it should answer or
+answering wrong; when it starts passing the note says to remove the marker.
+The cases marked today are bugs the verified examples found (issue #187) whose
+fix is the read-back planner's (issue #172): the owner's customer-credits
+question, answered as the waste breakdown where it should be refused naming
+shipments; shear by machine, refused with the stop-reason Pareto message
+where the one corrugator's shear is the answer; pounds of peel, refused with the
+router's weight refusal where the semantic model's `peel_lb` answers it; and
+the weight of paper consumed, answered in MSF, an area, where
+`paper_consumed_lb` is the weight asked. The whole-set run on `/evals` counts
+them as known defects, apart from its skips. An earlier one,
 `july-reason-surfaced` (now `month-before-dataset-reason-surfaced`: since issue
 #35 July is inside the year window, so the case asks about August 2025, before
 the year's first day), recorded that an investigation whose only tool call was

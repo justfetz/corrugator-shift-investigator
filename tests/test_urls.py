@@ -92,7 +92,12 @@ def test_every_golden_question_round_trips_through_its_url(case):
         assert addressed == asked, url
         after.append(resolved['text'])
     if 'url' in case['expect']:
-        assert resolve_url(url, store)['text'] == case['expect']['url']
+        landed = resolve_url(url, store)['text']
+        if case.get('known_defect') and landed != case['expect']['url']:
+            # The round trip above still held; the recorded address is the answer the case waits for, so a known defect lands
+            # elsewhere today and is an xfail here as in evals/run.py (evals/README.md#known-defects).
+            pytest.xfail(f"known defect, lands on {landed}: {case['known_defect']}")
+        assert landed == case['expect']['url']
 
 
 def test_an_old_pm_kind_answers_as_the_scheduled_kind():
