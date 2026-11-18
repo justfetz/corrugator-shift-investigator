@@ -443,8 +443,9 @@ class EvalBoard:
                 with lock:
                     self.runner.close_datasets()
             count = lambda outcome: sum(r['outcome'] == outcome for r in rows)
+            # A known defect (xfail) ran and is shown as one, never as a skip (evals/README.md#known-defects).
             payload = {'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'total': len(rows), 'passed': count('pass'),
-                       'failed': count('fail'), 'skipped': count('skip') + count('xfail'),
+                       'failed': count('fail'), 'skipped': count('skip'), 'known_defects': count('xfail'),
                        'latency_ms': self.runner.offline_latency(rows), 'model_called': False, 'cached': False, 'rows': rows}
             self._all = (time.monotonic(), payload)
             return payload

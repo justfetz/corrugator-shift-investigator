@@ -67,6 +67,7 @@ async function runAll(){
   renderScore(results);
   const failed=data.rows.filter(r=>r.outcome==='fail').map(r=>r.id);
   $('run-status').textContent=`This server, ${String(data.ran_at).replace('T',' ').replace('Z',' UTC')}: ${data.passed}/${data.total} passed`+(data.failed?`, ${data.failed} failed (${failed.slice(0,4).join(', ')})`:'')+(data.skipped?`, ${data.skipped} skipped`:'')
+   +(data.known_defects?`, ${data.known_defects} known defect${data.known_defects===1?'':'s'}`:'')
    +(data.latency_ms&&data.latency_ms.p50!==null?` · offline p50 ${ms(data.latency_ms.p50)}, p95 ${ms(data.latency_ms.p95)}`:'')+' · no model called'+(data.cached?' · this is the run from under a minute ago; the whole set is repeated at most once a minute':'');
  }catch(error){$('run-status').textContent=error.message;}
  finally{runningAll=false;$('run-all').disabled=false;}
