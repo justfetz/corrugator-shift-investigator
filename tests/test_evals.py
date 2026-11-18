@@ -301,7 +301,16 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                # of one 4-4-5 period, two turns (PR #168's fix round)
                'money-day-shift-lines-add-to-the-headline', 'money-day-shift-lines-add-up-28-sep', 'money-no-yearly-figure-from-one-day',
                'money-day-trim-by-shift-inside-the-band', 'money-ptd-label-names-its-end-day', 'money-period-operator-tile-is-the-ledger',
-               'money-kpi-waste-tiles-are-the-ownership-lines'}   # a week's KPI card and its ownership lens, two turns: 136 ms uncontended
+               'money-kpi-waste-tiles-are-the-ownership-lines',   # a week's KPI card and its ownership lens, two turns: 136 ms uncontended
+               'top-n-top-25-orders-says-top-25',   # every dry-end reject of the year to date ranked by order: 241-312 ms alone (PR #186)
+               # ... and 200 of them, on each scope, and the customers' rejects of the year to date, 40 and all 41: 163-320 ms alone
+               # (PR #186, round 2, item 2)
+               'top-n-top-200-orders-answers-in-full', 'top-n-top-200-orders-answers-in-full-all',
+               'top-n-top-200-customers-answers-in-full', 'top-n-top-40-customers-answers-in-full',
+               'top-n-top-two-hundred-orders-answers-in-full'}
+# A ranking of 200 rows that runs well inside the default states it (PR #186, round 2, item 2: every top N up to MAX_LIMIT answers in
+# full, each N = 200 case with a budget): the 183 production days of the year to date by MSF, 44-56 ms
+STATED_DEFAULT_CASES = {'top-n-top-200-days-answers-in-full'}
 # Nested windows as printed (the coordinator's review of 82c0994 on PR #168): one address a turn, each day of a week or a month,
 # each week of a period, then the window; each turn is a money card of its own with its period to date priced, so a case over
 # 250 ms carries 150 ms a turn, 500 at the least. Measured in-process / over GET on a shared 2-CPU box, three runs: September's
@@ -319,8 +328,9 @@ def test_heavy_cases_carry_an_explicit_offline_budget(monkeypatch):
     offline only: the live or replayed run of a live: true case shares its expect and is never timed
     against it. Checked at the product's own budgets: the CI scale (issue #139) is pinned to 1 here."""
     monkeypatch.delenv(golden.LATENCY_SCALE_ENV, raising=False)
-    assert {c['id'] for c in CASES if 'max_ms' in c['expect']} == HEAVY_CASES | NESTED_CASES
+    assert {c['id'] for c in CASES if 'max_ms' in c['expect']} == HEAVY_CASES | NESTED_CASES | STATED_DEFAULT_CASES
     assert all(c['expect']['max_ms'] == 500 for c in CASES if c['id'] in HEAVY_CASES)
+    assert all(c['expect']['max_ms'] == golden.DEFAULT_MAX_MS for c in CASES if c['id'] in STATED_DEFAULT_CASES)
     assert all(c['expect']['max_ms'] == max(500, 150 * len(c['turns'])) for c in CASES if c['id'] in NESTED_CASES)
     assert golden.latency_failures({'max_ms': 500}, None, 499.4) == []
     assert golden.latency_failures({'max_ms': 500}, None, 500.6) == ['501 ms, budget 500 ms']
@@ -485,8 +495,13 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # + the review of 7b46463's 5 + its probe's 4 + the reviewer's check of its fix, 1 + the review of 97b81f4's 9 + its probe's 1
     # + the reviewer's check of its fix, 2 + the review of 2c28fd3's 2 + the reviewer's check of its fix, 1
     # + 7 issue #164 money ledger cases + 1 asked by question in PR #168's fix round + 11 issue #177 All-day cases + 9 issue #177
-    # named-shift-list cases
-    assert len(routing) == 539 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # named-shift-list cases + 19 issue #185 top-N and year-to-date cases + 5 from the reviewer's check of its first fix + 1 of its second
+    # + PR #186's first coordinator review, 14 (three of them the owner's review kept on 'What were the downtime reasons yesterday?'),
+    # and the reviewer's check of that fix round, 4 + its second coordinator review, 33 (a month with its year, a top N up to 200 in full,
+    # the selected period by its number, the words said short, the waste breakdown of a month named and two guards beside it) + the
+    # reviewer's check of that round, 14, and its re-check, 11 + the coordinator's review at 9d12f76 (round 3), 9 (the period before by
+    # its number compared, the review kept beside it, and two named dates that keep main's answer) + the reviewer's check of that fix, 5, and its re-check, 2
+    assert len(routing) == 656 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

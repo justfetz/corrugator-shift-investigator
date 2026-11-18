@@ -120,7 +120,9 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
             shifts = [first['shift'], first['against_shift']]   # the shift explained, then the one it is measured against
         window_param = None   # the question's own window when it is not the Period control's
         if window is not None and (window['period'], window['anchor']) != (control, day):
-            if window['anchor'] == day:
+            if window['period'] == semantic.YTD and window['anchor'] == day:
+                window_param = semantic.YTD                                          # "year to date" (issue #185): the semantic model's
+            elif window['anchor'] == day:
                 window_param = TOOL_TO_GRAIN[window['period']]                      # "this week" under Day
             elif window['period'] == 'month' and window['anchor'].endswith('-01'):
                 window_param = _month_of(window['anchor'])                          # a named month: "August"
@@ -134,14 +136,15 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
             params += [(key, slug(lead[key])) for key in ('reason', 'place', 'grade', 'waste') if key in lead]
         elif tools == (semantic.TOOL,):
             measure = 'semantic'   # issue #117: the query's own names, already the model's (validate resolved any synonym)
-            params.append(('m', first['measure']))
+            lead = request.get('lead') or {}
+            if not lead.get('default'):
+                params.append(('m', first['measure']))   # ... left out when it is the split's default ranking (issue #185)
             if first['group_by']:
                 params.append(('by', ','.join(first['group_by'])))
-            lead = request.get('lead') or {}
             if lead.get('rank'):
                 params.append(('rank', lead['rank']))   # issue #144: a ranked question keeps its ranking
-            if first.get('limit', semantic.DEFAULT_LIMIT) != semantic.DEFAULT_LIMIT:
-                params.append(('top', str(first['limit'])))
+            if first.get('limit', semantic.DEFAULT_LIMIT) != semantic.DEFAULT_LIMIT or lead.get('top'):
+                params.append(('top', str(first['limit'])))   # "top 25", the default limit asked, too (the review of PR #186, item 3)
             if first.get('share') is not None:
                 params.append(('share', _semantic_text(first['share'])))   # one value's share: the query's own field
             elif lead.get('shares'):
@@ -421,11 +424,14 @@ def _window(value, tool_period, day):
     inside the dataset or not: the tool answers with its own reason)."""
     if value is None:
         return {'period': tool_period, 'anchor': day}
+    if value == semantic.YTD:   # the year to date, 1 January through the day (issue #185): measure=semantic only (_request)
+        return {'period': semantic.YTD, 'anchor': day}
     if value in GRAIN_TO_TOOL and value != 'day':
         return {'period': GRAIN_TO_TOOL[value], 'anchor': day}
     if re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', value):
         return {'period': 'month', 'anchor': value + '-01'}
-    raise ValueError('window is week, month, period (the 4-4-5 period containing the day) or a month as YYYY-MM')
+    raise ValueError('window is week, month, period (the 4-4-5 period containing the day), ytd (the year to date, measure=semantic) '
+                     'or a month as YYYY-MM')
 
 
 def _wants(value):
@@ -442,6 +448,9 @@ def _request(measure, fields, context, window, store=None):
     shifts = _shift_list(fields.get('shifts'), scope, shift)
     if measure == 'semantic':
         return _semantic(fields, context, window, shifts, store)
+    if window['period'] == semantic.YTD:
+        # the reports and the period tools read no year to date (their year period is issue #106): the semantic model alone does
+        raise ValueError('window=ytd (the year to date) is read by the semantic model only: ask it with measure=semantic&m=<measure>')
     if measure in MEASURE_INTENTS:
         intent = MEASURE_INTENTS[measure]
         group_by, kind = 'reason', None
@@ -616,12 +625,23 @@ def _semantic(fields, context, window, shifts, store):
         if not re.fullmatch(r'[1-9]\d{0,2}', fields['top']) or int(fields['top']) > semantic.MAX_LIMIT or not group_by:
             raise ValueError(f'top is a number of rows from 1 to {semantic.MAX_LIMIT}, with by=<dimension>')
         limit = int(fields['top'])
+        if limit == semantic.DEFAULT_LIMIT:
+            lead['top'] = True   # top=25: the default limit asked as N, which the card says ("top 25")
     share = fields.get('share')
     if share == 'each':   # every row's share of the total: the card leads with the largest share (the review of PR #155)
         if len(group_by) != 1:
             raise ValueError('share=each reads each row of a single by= dimension as its share of the total, for a count or a sum')
         lead['shares'], share = True, None
-    query = semantic.SemanticQuery(measure=fields.get('m'), group_by=group_by, filters=filters, window=window,
+    measure = fields.get('m')
+    if measure is None and order is not None and len(group_by) == 1:
+        # a ranking of a dimension the model ranks by a default measure (the stop reasons: downtime minutes, issue #185) names none
+        try:
+            rank_by = semantic.model().dimensions[semantic.resolve_dimension(group_by[0])].get('rank_by')
+        except semantic.SemanticError:
+            rank_by = None
+        if rank_by:
+            measure, lead['default'] = rank_by['measure'], True
+    query = semantic.SemanticQuery(measure=measure, group_by=group_by, filters=filters, window=window,
                                    compare='previous' if compare else None, order=order, limit=limit, shift=shift, share=share)
     query = semantic.validate(query, store)
     if lead.get('shares') and semantic.model().measures[query.measure]['agg'] not in semantic.ADDITIVE:

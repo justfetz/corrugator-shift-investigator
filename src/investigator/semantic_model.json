@@ -47,6 +47,31 @@
   {"from": "reject", "to": "shift", "on": [["production_date", "production_date"], ["shift", "shift"]], "relationship": "many_to_one"},
   {"from": "lane", "to": "shift", "on": [["production_date", "production_date"], ["shift", "shift"]], "relationship": "many_to_one"}
  ],
+ "windows": {
+  "about": "The windows a request reads, {period, anchor}: the period names the window and the anchor is a day inside it. The production day, the Mon-Fri week, the calendar month and the 4-4-5 period are the period tools' own windows (record_store.parse_window); the year to date is the semantic model's alone, so a report or a period tool never reads it (their year period is issue #106).",
+  "periods": [
+   {"name": "day", "label": "Production day", "description": "One production day, Monday to Friday, starting 07:00.", "examples": ["the selected day", "yesterday"]},
+   {"name": "week", "label": "Production week", "description": "The Monday-to-Friday week that holds the anchor.", "examples": ["this week", "last week"]},
+   {"name": "month", "label": "Calendar month", "description": "The calendar month that holds the anchor.", "examples": ["this month", "last month", "in August"]},
+   {"name": "fiscal", "label": "4-4-5 period", "description": "The 4-4-5 accounting period that holds the anchor.", "examples": ["this period", "last period", "P9"]},
+   {"name": "ytd", "label": "Year to date", "description": "1 January of the anchor's year through the anchor, the anchor included (issue #185). It has no window of the same kind before it, so it is never compared with the previous window.",
+    "words": ["ytd", "y-t-d", "year to date", "this year to date", "the year to date", "this year", "so far this year", "this year so far", "the year so far"]}
+  ],
+  "shorthand": {
+   "about": "Window words said short, read as the words they shorten before any window is read, by the hand router and the parser alike (the coordinator's review of PR #186, round 2, item 5): 'last wk' is last week, 'in Sept' and 'Sep 2026' are September, 'PTD' the period to date and 'Q-3' or '3Q' the third quarter, which are windows the model does not read and are refused. The months said short ('months', 'Sep' and 'Sept' among them) are read only where a window stands, right after a word that leads one ('in Aug', 'for Sept', 'during Jul', 'versus Jul') or before a year ('Dec 2025'), and never beside a day's number: 'the dec in speed' and 'the current apr' are not months, and '7 Sep', 'Sep 10' or 'the week of 7 Aug' is a named date, never the whole month (the coordinator's review of PR #186 at 9d12f76, item 2). 'Mo' ('relative') is a month only after this, last or next ('last mo'): 'downtime on mo' is not one.",
+   "words": {"wk": "week", "wks": "weeks", "mos": "months", "ptd": "period to date",
+             "q-1": "q1", "q-2": "q2", "q-3": "q3", "q-4": "q4", "1q": "q1", "2q": "q2", "3q": "q3", "4q": "q4"},
+   "months": {"jan": "january", "feb": "february", "mar": "march", "apr": "april", "jun": "june", "jul": "july", "aug": "august",
+              "sep": "september", "sept": "september", "oct": "october", "nov": "november", "dec": "december"},
+   "relative": {"mo": "month"}
+  },
+  "future": {
+   "about": "Windows after the selected day, refused: a question is answered up to the selected day, never after it (the coordinator's review of PR #186, round 2, item 5). 'Next' said with a count of weeks, months, days or periods ('next 2 weeks') is one too.",
+   "words": ["next week", "next production week", "next month", "next period", "next accounting period", "next 4-4-5 period", "next fiscal period",
+             "coming week", "coming weeks", "coming month", "coming months", "coming period", "upcoming week", "upcoming weeks", "upcoming month",
+             "upcoming months", "upcoming period", "week after next", "month after next", "day after next"]
+  }
+ },
  "dimensions": [
   {"name": "day", "label": "Production day", "type": "time", "grain": "day", "entity": "*", "expr": "{production_date}",
    "description": "The production day: starts 07:00 and carries its start date, Monday to Friday.", "synonyms": ["date", "daily", "by day"]},
@@ -82,7 +107,9 @@
                       "Upper knife": ["upper cutoff", "upper cut-off", "top knife"], "Lower knife": ["lower cutoff", "lower cut-off", "bottom knife"],
                       "Slitter/scorer": ["slitter", "scorer", "slitter scorer"], "Steam system": ["steam", "boiler"]}},
   {"name": "reason", "label": "Stop reason", "type": "categorical", "entity": "stop", "expr": "{reason}",
-   "description": "The reason logged for the stop: missed splice, knife / slitter jam, stacker, raw material, order change, glue / starch, steam / moisture, power outage, other; planned maintenance for a scheduled stop.", "synonyms": ["stop reason", "downtime reason", "cause"],
+   "description": "The reason logged for the stop: missed splice, knife / slitter jam, stacker, raw material, order change, glue / starch, steam / moisture, power outage, other; planned maintenance for a scheduled stop.", "synonyms": ["stop reason", "downtime reason", "cause", "reason", "reasons", "problem"],
+   "rank_by": {"measure": "downtime_minutes", "top": 5, "words": ["pareto"],
+               "description": "The owner's ruling (2026-11-15, issue #172): stop reasons ranked with no measure named ('top maintenance reasons', 'biggest maintenance problems', 'maintenance pareto') rank by downtime minutes, each with its share of the total beside it; a ranking of the reasons as a set ('top reasons', 'the pareto') with no number asked lists the top 5. 'Top 5 reasons by stops' still ranks by stops, and only 'by stops' or 'most stops' counts them: 'top stop reasons' rank by downtime minutes too (the coordinator's default from the owner's 15 Nov calls, PR #186)."},
    "value_synonyms": {"Glue / starch": ["glue", "starch"], "Knife / slitter jam": ["knife", "cut-off", "cutoff", "slitter jam", "knife jam", "slitter jams", "knife jams"],
                       "Missed splice": ["splice", "missed splices", "splicer"], "Order change": ["changeover", "order changes", "setup change"],
                       "Raw material (roll)": ["raw material", "roll", "paper"], "Steam / moisture": ["steam", "moisture"],
