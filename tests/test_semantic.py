@@ -333,6 +333,129 @@ def check_maintenance_pm_minutes(store):
         assert abs(got - tool['maintenance_minutes'] - tool['pm_minutes']) <= 0.011, (window, shift)
 
 
+def _variance(store, window, shift):
+    """get_speed_variance against the baseline: its buckets per scheduled minute, and the window's scheduled minutes that
+    turn each back into feet (issue #187's speed measures are those buckets in feet)."""
+    tool = store.get_speed_variance(window, shift, against='baseline')
+    minutes = run(store, 'scheduled_minutes', window, shift=shift)['value']
+    details = {}
+    for d in tool['details']:
+        details.setdefault(d['bucket'], {})[d['item']] = d
+    return details, minutes
+
+
+LOSS_PLACES = 0.0051   # the variance rounds each loss per scheduled minute to two places (record_store.get_speed_variance)
+
+
+def check_runs_gap(measure):
+    """The footage recoverable by grade (issue #187, targets.json's speed gap) = record_store.speed_baseline_gap's runs: each paper
+    run on its day under its grade's baseline, its gap in feet (each rounded to a tenth), summed by grade. A run is cut by shift, as
+    the money ledger cuts it, so over all shifts it is the tool's runs of each shift added up. In ft/min, over the grade totals'
+    running minutes (lineal feet over the speed without stops, rounded to a tenth)."""
+    def check(store):
+        for window, shift in PERIOD_CASES:
+            want = {}
+            for s in ([shift] if shift else [1, 2, 3]):
+                for r in store.speed_baseline_gap(window, s)['runs']:
+                    total, count = want.get(r['grade'], (0.0, 0))
+                    want[r['grade']] = (total + r['gap_ft'], count + 1)
+            got = rows_by(run(store, measure, window, shift=shift, group_by=['grade'], limit=200), 'grade')
+            totals = {r['grade']: r for r in store.get_grade_totals(window, shift)['rows']}
+            assert set(got) == set(want), (window, shift)
+            for grade, (feet, count) in want.items():
+                if measure == 'speed_gap_ft':
+                    assert abs(got[grade]['value'] - feet) <= 0.051 * count, (window, shift, grade, got[grade]['value'], feet)
+                else:
+                    running = totals[grade]['lineal_ft'] / totals[grade]['speed_run_fpm']
+                    want_fpm = feet / running
+                    assert abs(got[grade]['value'] - want_fpm) <= abs(want_fpm) * 2e-4 + 0.051 * count / running, (window, shift, grade)
+    return check
+
+
+def check_speed_gap(measure):
+    """The speed gap by grade (issue #187) = get_speed_variance's running-under-baseline bucket for that grade: its loss per
+    scheduled minute (rounded to two places) times the window's scheduled minutes in feet, the same over the running minutes in ft/min; the grade
+    baseline = the bucket's baseline (record_store.grade_speed_baselines, a tenth); the feet at the baseline = that baseline
+    over the grade totals' running minutes (lineal feet over the speed without stops, rounded to a tenth)."""
+    def check(store):
+        for window, shift in PERIOD_CASES:
+            details, scheduled = _variance(store, window, shift)
+            got = rows_by(run(store, measure, window, shift=shift, group_by=['grade'], limit=200), 'grade')
+            totals = {r['grade']: r for r in store.get_grade_totals(window, shift)['rows']}
+            assert set(got) == set(details['below_baseline']) == set(totals), (measure, window, shift)
+            for grade, d in details['below_baseline'].items():
+                if measure == 'below_baseline_ft':
+                    want, slack = d['current_loss_fpm'] * scheduled, LOSS_PLACES * scheduled
+                elif measure == 'baseline_speed_fpm':
+                    want = d['baseline_fpm']
+                    slack = abs(want) * 1e-9
+                else:   # baseline_run_ft
+                    want = d['baseline_fpm'] * totals[grade]['lineal_ft'] / totals[grade]['speed_run_fpm']
+                    slack = abs(want) * 2e-4
+                assert abs(got[grade]['value'] - want) <= slack + 1e-6, (measure, window, shift, grade, got[grade]['value'], want)
+    return check
+
+
+def check_stop_loss(store):
+    """Feet lost to unplanned stops by reason (issue #187) = get_speed_variance's stops bucket for that reason (and, for order
+    changes, its setups bucket over every grade), per scheduled minute rounded to two places, times the window's scheduled minutes."""
+    for window, shift in PERIOD_CASES:
+        details, scheduled = _variance(store, window, shift)
+        got = rows_by(run(store, 'stop_loss_ft', window, shift=shift, group_by=['reason'], limit=200), 'reason')
+        want = {reason: (d['current_loss_fpm'] * scheduled, LOSS_PLACES * scheduled) for reason, d in details.get('stops', {}).items() if d['stops']}
+        setups = [d for d in details.get('setups', {}).values() if d['stops']]
+        if setups:
+            want['Order change'] = (sum(d['current_loss_fpm'] for d in setups) * scheduled, LOSS_PLACES * scheduled * len(setups))
+        assert set(got) == set(want), (window, shift)
+        for reason, (feet, slack) in want.items():
+            assert abs(got[reason]['value'] - feet) <= slack, (window, shift, reason, got[reason]['value'], feet)
+
+
+def check_downtime_clock_pct(store):
+    """Downtime of the setup clock (issue #187) = the downtime minutes over the setup clock, both measures checked against
+    the tools above, by grade and over the whole window."""
+    for window, shift in PERIOD_CASES:
+        for split in ([], ['grade']):
+            got = run(store, 'downtime_clock_pct', window, shift=shift, group_by=split, limit=200)
+            minutes = run(store, 'downtime_minutes', window, shift=shift, group_by=split, limit=200)
+            clock = run(store, 'elapsed_minutes', window, shift=shift, group_by=split, limit=200)
+            if not split:
+                assert close(got['value'], minutes['value'] / clock['value'] * 100)
+                continue
+            m, c = rows_by(minutes, 'grade'), rows_by(clock, 'grade')
+            for grade, row in rows_by(got, 'grade').items():
+                assert close(row['value'], (m[grade]['value'] if grade in m else 0) / c[grade]['value'] * 100), (window, shift, grade)
+
+
+def _basis_weights():
+    """Each paper grade's basis weight in lb per MSF, read from the generator's own construction table (synth.CONSTRUCTION):
+    the number its paper's name gives ('26 lb liner'). The model reads it from the roll record's paper grade instead."""
+    from investigator.synth import CONSTRUCTION
+    return {paper: float(re.match(r'(\d+(?:\.\d+)?) lb ', paper).group(1)) for stands in CONSTRUCTION.values() for _, paper, _ in stands}
+
+
+def check_rolls(measure):
+    """Peel, core and the paper consumed by weight (issue #187), against the roll records' own square feet summed by paper
+    grade and weighed at the generator's basis weights; the percents are their ratios."""
+    parts = {'peel_lb': ('peel',), 'core_lb': ('core',), 'peel_core_lb': ('peel', 'core'), 'paper_consumed_lb': ('fed', 'peel', 'core')}
+    ratios = {'peel_pct': 'peel_lb', 'core_pct': 'core_lb', 'peel_core_pct': 'peel_core_lb'}
+
+    def check(store):
+        weights = _basis_weights()
+        for window in (WEEK, MONTH, FISCAL):
+            _, _, start, end = S.parse_window(window)
+            rows = store._fetch('SELECT paper_grade, sum(lineal_ft * width_in / 12) AS fed, sum(peel_sqft) AS peel, sum(core_sqft) AS core '
+                                'FROM rolls WHERE production_date BETWEEN ? AND ? GROUP BY paper_grade', [start.isoformat(), end.isoformat()])
+            assert {r['paper_grade'] for r in rows} <= set(weights)
+            lb = {name: sum(weights[r['paper_grade']] * sum(r[p] for p in ps) / 1000 for r in rows) for name, ps in parts.items()}
+            want = lb[measure] if measure in lb else lb[ratios[measure]] / lb['paper_consumed_lb'] * 100
+            got = run(store, measure, window)
+            assert close(got['value'], want), (measure, window, got['value'], want)
+            if measure in ('peel_pct', 'core_pct'):
+                assert got['band'] == targets.band(measure.split('_')[0], want)
+    return check
+
+
 FAMILIES = {'bond': 'BOND', 'warp': 'WARP', 'misalignment': 'MISALIGNMENT', 'moisture': 'MOISTURE', 'other': 'OTHER'}
 
 CHECKS = {
@@ -416,6 +539,15 @@ CHECKS = {
     'stacker_waste_sqft': [check_waste('stacker_waste_sqft', 'stacker_waste')],
     'admin_sqft': [check_waste('admin_sqft', 'admin')],
     'unexplained_usd': [check_waste('unexplained_usd', 'unexplained', 'usd', 2)],
+    # issue #187: the speed gap and the feet lost to stops at each grade's baseline, the downtime of the setup clock, peel and core
+    'baseline_run_ft': [check_speed_gap('baseline_run_ft')],
+    'baseline_speed_fpm': [check_speed_gap('baseline_speed_fpm')],
+    'speed_gap_ft': [check_runs_gap('speed_gap_ft')],
+    'below_baseline_ft': [check_speed_gap('below_baseline_ft')],
+    'speed_gap_fpm': [check_runs_gap('speed_gap_fpm')],
+    'stop_loss_ft': [check_stop_loss],
+    'downtime_clock_pct': [check_downtime_clock_pct],
+    **{name: [check_rolls(name)] for name in ('paper_consumed_lb', 'peel_lb', 'core_lb', 'peel_core_lb', 'peel_pct', 'core_pct', 'peel_core_pct')},
 }
 
 
@@ -482,11 +614,13 @@ def test_physical_names_live_in_the_one_mapping_block():
                     bare = re.findall(r'[A-Za-z_]\w*', re.sub(r'\{[a-z_]+\}', '', re.sub(r"'[^']*'", '', item[key])))
                     assert set(bare) <= S.FUNCTIONS, (item['name'], bare)
     model = S.model()
-    aliases = re.compile(r'\b(b|j\d)\.([A-Za-z_]\w*)')
+    # the entity's own alias, a dimension's join, and the grade baseline's setup and trailing-year rows (issue #187)
+    aliases = re.compile(r'\b(b|j\d|bg|bb)\.([A-Za-z_]\w*)')
     for name in model.measures:
-        query = S.validate(S.SemanticQuery(name, window=WEEK, group_by=['shift']))
+        entity = model.measure_entities(name)[0]
+        query = S.validate(S.SemanticQuery(name, window=WEEK, group_by=['shift' if model.mapped(entity, 'shift') else 'day']))
         for statement in S.compile_query(query).statements:
-            tables = {table for table, _ in re.findall(r'(?:FROM|JOIN) ([a-z_]+) (b|j\d)\b', statement.sql)}
+            tables = {table for table, _ in re.findall(r'(?:FROM|JOIN) ([a-z_]+) (b|j\d|bg|bb)\b', statement.sql)}
             assert tables <= {e['table'] for e in physical.values()}
             readable = set().union(*(mapped[table] for table in tables))
             for alias, column in aliases.findall(statement.sql):
@@ -741,6 +875,10 @@ def test_the_docs_page_is_rendered_from_the_model_file():
     assert 'Maintenance: target 2.5% / flag 2.5% of scheduled minutes' in text
     assert '| db, double-backer, hot plates | place Double backer |' in text
     assert '| lane | `setup_orders` | `customer_id` | `customer_id` |' in text and 'not carried yet' not in text   # contract v2 carries the customer
+    # the one logical column no record carries: a roll's shift (issue #187: a roll belongs to its paper run's day)
+    unmapped = [(name, logical) for name, e in json.loads(S.MODEL_PATH.read_text())['physical']['entities'].items()
+                for logical, column in e['columns'].items() if column is None]
+    assert unmapped == [('roll', 'shift')] and '| roll | `rolls` | `shift` | not on this record |' in text
     assert "| reject | `rejects` | `line_id` |" in text and "counted_in = 'dry_end'" in text
     html = docsite.build_site()['/docs/semantic-model'].decode()
     assert '<h1' in html and 'The semantic model' in html and 'downtime_minutes' in html

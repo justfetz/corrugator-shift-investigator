@@ -189,12 +189,32 @@ def test_run_all_scores_the_whole_set_once_a_minute(running, monkeypatch):
     status, result = run(running, {'all': True})
     assert status == 200 and result['total'] == HISTORY[-1]['cases'] == len(result['rows'])
     failed = [(row['id'], row['ms'], row['failures']) for row in result['rows'] if row['outcome'] == 'fail']   # name a failing case, not a count
-    assert result['failed'] == 0 and result['passed'] + result['skipped'] == result['total'] and result['model_called'] is False, failed
+    assert result['failed'] == 0 and result['passed'] + result['skipped'] + result['known_defects'] == result['total'] and result['model_called'] is False, failed
+    assert result['known_defects'] == sum(row['outcome'] == 'xfail' for row in result['rows']) > 0   # the golden set's known defects, apart
     assert result['cached'] is False and result['latency_ms']['p50'] is not None
     assert len({row['id'] for row in result['rows']}) == result['total']
     status, again = run(running, {'all': True})
     assert status == 200 and again['cached'] is True and again['ran_at'] == result['ran_at']
     assert running.app.evals.runner._DATASETS == {}                      # the run's day stores are closed, not kept
+
+
+def test_this_servers_run_counts_known_defects_apart_from_skips(running, monkeypatch):
+    """The coordinator's review of e545dfb, item 3: the "This server, now" run line counted a known defect (xfail) as skipped. A
+    known defect ran and is shown as one, never as a skip (evals/README.md#known-defects, docsite's case-study table), so the
+    payload counts skips and known defects apart, and every row is in exactly one of passed, failed, skipped or known defects."""
+    board = running.app.evals
+    picked = [next(p for p in board.plan if p[0]['id'] == case_id) for case_id in
+              ('why-slow', 'examples-customer-credits-for-bond-and-warp-refused-naming-shipments',
+               'examples-shear-percent-by-machine-is-the-one-corrugator')]
+    outcomes = {'why-slow': 'pass', 'examples-customer-credits-for-bond-and-warp-refused-naming-shipments': 'xfail',
+                'examples-shear-percent-by-machine-is-the-one-corrugator': 'xfail'}
+    monkeypatch.setattr(board, 'plan', picked + [({'id': 'a-stale-recording', 'type': 'routing'}, '?')])
+    monkeypatch.setattr(board, '_all', None)
+    monkeypatch.setattr(board, '_run', lambda case, provider: ('skip', [], 'no recorded fixture', 0.0, []) if provider == '?'
+                        else (outcomes[case['id']], [], 'known defect: Issue #172' if outcomes[case['id']] == 'xfail' else '', 9.0, []))
+    result = board.run_all(running.app.lock)
+    assert (result['total'], result['passed'], result['failed'], result['skipped'], result['known_defects']) == (4, 1, 0, 1, 2), result
+    assert result['passed'] + result['failed'] + result['skipped'] + result['known_defects'] == result['total']
 
 
 def test_run_endpoint_keeps_the_post_protections(running):

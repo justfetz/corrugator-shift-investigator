@@ -111,7 +111,7 @@ The same seed gives byte-identical JSONL, and a day gives the same records whate
 | `stand`, `paper_grade` | text | the roll stand of the grade's construction and the paper on it |
 | `width_in` | in | the run's web width |
 | `lineal_ft` | ft | feet fed into the run (a medium's include its flute take-up: C 1.43, B 1.32, E 1.25) |
-| `peel_sqft` | sq ft | outer wraps stripped at roll prep |
+| `peel_sqft` | sq ft | outer wraps stripped at roll prep (the semantic model weighs it, issue #187: the paper grade's own name gives its basis weight in lb per MSF, `26 lb liner`, the paper its board grade's recipe puts on that stand; no other field carries a weight) |
 | `core_sqft`, `spliced_out` | sq ft, bool | paper left on the core when the roll was spliced out; 0 for the last roll on a stand, returned to stock at the paper change |
 | `production_date` | YYYYMMDD | the run's production day |
 
@@ -174,4 +174,4 @@ The stories keep their 2026 dates in every window. The first ends on 31 October 
 
 ## Not modelled
 
-Holidays, timezone / DST, overlapping or shift-crossing stops, an order ledger beyond each lane's demand (the daily order matrix keeps requested / remaining sheets null), reject replacement, accepted-shipment accounting, paper recipes and basis weights, the swing knife's area (the demo machine has none), a third lane (two cutoff knives), and any vendor field semantics beyond the definitions above and in [the record contract](RECORD_CONTRACT.md).
+Holidays, timezone / DST, overlapping or shift-crossing stops, an order ledger beyond each lane's demand (the daily order matrix keeps requested / remaining sheets null), reject replacement, accepted-shipment accounting, paper recipes and basis weights as records of their own (the generator's recipe for each board grade names the paper on each stand, and a roll's `paper_grade` carries that name with its basis weight, which is all the semantic model weighs by), the swing knife's area (the demo machine has none), a third lane (two cutoff knives), and any vendor field semantics beyond the definitions above and in [the record contract](RECORD_CONTRACT.md).
