@@ -213,7 +213,7 @@ class Workbench:
         self.evals_json = json.dumps(self.evals.board(public=public is not None), allow_nan=False).encode() if self.evals else None
         # The docs site at /docs (issue #93): {path: html}, prebuilt in the image or rendered from the checkout;
         # None when neither is there, and /docs is then a 404 like any unknown path.
-        self.docs = load_docs()
+        self.docs = load_docs(self.store)   # /docs/sql reads this store's records when it holds the page's days (#190)
         # The question log (issue #125): on in the hosted demo, QUESTION_LOG=1 or 0 to choose; an invalid value fails at boot.
         self.qlog = QuestionLog.from_env(public, dataset=self.store.content_hash[:12])
 

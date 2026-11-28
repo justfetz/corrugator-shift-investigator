@@ -1719,7 +1719,9 @@ def model_markdown(text=None):
            '`semantic.validate` refuses an unknown measure, dimension or filter value with the nearest valid choices; '
            '`semantic.compile_query` writes parameterized DuckDB SQL over the tables and columns the physical block names, '
            'with a LIMIT on every statement; `semantic.run` executes it under the store\'s two-second interrupt and returns '
-           'rows plus a receipt: the SQL with its parameters, and the ids of the records behind each row.', '',
+           'rows plus a receipt: the SQL with its parameters, and the ids of the records behind each row. '
+           '[How a question becomes SQL](../../docs/SQL.md) follows one request through these steps, with the statements the '
+           'compiler writes for it, and shows how they are tested.', '',
            'The address of a request ([the URL grammar](../../docs/URLS.md)):', '',
            '    /corr/1/<grain>/<day>[/shift/<n>]?measure=semantic&m=<measure>&by=<dimension>[,<dimension>]&<dimension>=<value>',
            '',

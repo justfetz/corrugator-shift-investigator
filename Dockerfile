@@ -15,6 +15,8 @@ COPY src ./src
 COPY evals ./evals
 # The Markdown behind /docs (issue #93), rendered once below; the folder's design mockups are not copied.
 COPY docs/*.md ./docs/
+# One test file: /docs/sql shows the worked example's hand-written SQL oracle beside the compiler's statements (issue #190).
+COPY tests/test_examples.py ./tests/
 # Generate the data (1 January 2025 to yesterday) once here, not at every container start (issues #19, #35, #100): the server
 # loads /app/prebuilt in about 400 ms instead of generating for about 25 s. The window ends
 # yesterday (UTC) at build time and is fixed for the image, whenever a container starts; the
@@ -23,7 +25,7 @@ COPY docs/*.md ./docs/
 # scores against; it is loaded on the first eval run, never at boot.
 RUN pip install --no-cache-dir . && python -m investigator.prebuilt /app/prebuilt \
     && python -m investigator.prebuilt --as-of "$(python -c 'import json; print(json.load(open("evals/golden_values.json"))["as_of"])')" /app/prebuilt-golden \
-    && python -m investigator.docsite build /app/docs-site --root /app \
+    && INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden python -m investigator.docsite build /app/docs-site --root /app \
     && mkdir -p /app/artifacts && chown -R app:app /app
 ENV INVESTIGATOR_PREBUILT=/app/prebuilt INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden INVESTIGATOR_EVALS=/app/evals INVESTIGATOR_DOCS=/app/docs-site
 
