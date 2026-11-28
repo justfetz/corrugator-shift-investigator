@@ -522,8 +522,8 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # (round 3), 9 (the period before by its number compared, the review kept beside it, and two named dates that keep main's answer)
     # + the reviewer's check of that fix, 5, and its re-check, 2 + the catch-up with main's date family, 8 (a short month with
     # punctuation or 'the' before its day, or a day before its lead word, keeps main's answer) + the reviewer's check of it, 13 (forms
-    # it missed, guards where it lost the month 161eabb read, and the coordinator's questions asked under All)
-    assert len(routing) == 688 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # it missed, guards where it lost the month 161eabb read, and the coordinator's questions asked under All) + its re-check, 4
+    assert len(routing) == 692 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

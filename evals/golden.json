@@ -29300,6 +29300,78 @@
     "status": "complete"
    },
    "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-downtime-for-sep-10-top-5-reasons",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime for Sep 10 top 5 reasons",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2, the reviewer subagent's re-check of 25145f5: a day said beside the month before a ranking word is still a day: main's answer; 25145f5 read the whole month."
+  },
+  {
+   "id": "top-n-date-top-downtime-reasons-for-sep-10-most-minutes",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "top downtime reasons for Sep 10 most minutes",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=pareto",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2, the reviewer subagent's re-check of 25145f5: a day said beside the month before a ranking word is still a day: main's answer; 25145f5 read the whole month."
+  },
+  {
+   "id": "top-n-date-trim-for-aug-3-grades",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim for Aug 3 grades",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2, the reviewer subagent's re-check of 25145f5: a day said beside the month before a ranking word is still a day: refused, as on main; 25145f5 read the whole month."
+  },
+  {
+   "id": "top-n-date-downtime-in-aug-for-the-second-and-third-shifts-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Aug for the second and third shifts",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2, the reviewer subagent's re-check of 25145f5: a list of shifts said in words is no day: the month 161eabb read, as the full 'in August' form does; 25145f5 lost it."
+  },
+  {
+   "id": "top-n-date-downtime-in-aug-the-1st-and-second-shift-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Aug, the 1st and second shift",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2, the reviewer subagent's re-check of 25145f5: a list of shifts said in words is no day: the month 161eabb read; 25145f5 lost it."
+  },
+  {
+   "id": "top-n-date-stops-in-aug-the-5-longest",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "stops in Aug, the 5 longest",
+   "expect": {
+    "raises": "^'5' asks for a subset"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2, the reviewer subagent's re-check of 25145f5: a ranking's count ('the 5 longest') is no day: refused as at 161eabb and as 'stops in August, the 5 longest'; 25145f5 answered the selected day."
   }
  ]
 }

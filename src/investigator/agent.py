@@ -892,12 +892,17 @@ DAY_GAP = r"[\s,.:;/()#\u2013\u2014-]*"                                  # what 
 ORDINAL_WORDS = (r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|"
                  r"sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty[\s-](?:first|second|third|fourth|fifth|sixth|seventh|"
                  r"eighth|ninth)|thirtieth|thirty[\s-]first)\b")
-NOT_SHIFT = r"(?!(?:\s*(?:,|and|&|or|to|-)\s*\d{1,2}(?:st|nd|rd|th)?)*\s*(?:shifts?|crews?)\b)"   # "2nd shift", "2nd and 3rd shift"
-NOT_COUNT = r"(?!\s*(?:biggest|worst|best|largest|smallest|most|least|top|bottom|highest|lowest|reasons?|grades?)\b)"   # "3 biggest reasons"
+# "2nd shift", "2nd and 3rd shift", "second and third shifts", "the 1st and second shift"
+NOT_SHIFT = (r"(?!(?:\s*(?:,|and|&|or|to|-)\s*(?:the\s+)?(?:\d{1,2}(?:st|nd|rd|th)?\b|" + ORDINAL_WORDS + r"))*\s*(?:shifts?|crews?)\b)")
+NOT_COUNT = (r"(?!\s*(?:biggest|worst|best|largest|smallest|longest|shortest|slowest|fastest|most|least|top|bottom|highest|lowest|"
+             r"reasons?|grades?|stops?|setups?|minutes?|mins?)\b)")   # "3 biggest reasons", "the 5 longest"
 DAY_NUMBER = r"\d{1,2}(?:st|nd|rd|th)?\b" + NOT_SHIFT + NOT_COUNT
 DAY_SAID = r"(?:\d{1,2}(?:st|nd|rd|th)?\b|" + ORDINAL_WORDS + r")" + NOT_SHIFT + NOT_COUNT   # a day's number in digits or in words
 DAY_LEAD = r"(?:(?:on|around|from|until|till|before|after|up\s+to|between|through|thru|during|in|for)\s+)"   # "Sep from the 7th"
-DAY_BESIDE = (DAY_GAP + DAY_LEAD + r"?(?:the\s+)?(?:week\s+of\s+(?:the\s+)?)?(?:day\s+)?" + DAY_SAID)   # "Sep 10", "Sept the 10th"
+# ... said right after the month ("Sep 10", "Sept 10th top 5 reasons") as 161eabb read it, whatever follows; said with a gap ("Sept the
+# 10th", "Sep, 10th"), never a list of shifts or a ranking's count ("Aug, 2nd and 3rd shift", "Aug, the 5 longest")
+DAY_BESIDE = (r"(?:\.?\s*\d{1,2}(?:st|nd|rd|th)?\b|" + DAY_GAP + DAY_LEAD + r"?(?:the\s+)?(?:week\s+of\s+(?:the\s+)?)?(?:day\s+)?"
+              + DAY_SAID + ")")
 # ... a day said before a month or its lead: an ordinal ("3rd", "the third"), or a number after the, on or day ("on 10", "day 10")
 DAY_LIKE = (r"(?:\b(?:the|on|day)\s+" + DAY_SAID + r"|\b\d{1,2}(?:st|nd|rd|th)\b" + NOT_SHIFT + r")(?:\s+(?:day|week))?")
 DAY_BEFORE = r"(?:\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?|" + DAY_LIKE + DAY_GAP + r"(?:of\s+)?)$"   # "10 Sep", "the 10th, Sep"
