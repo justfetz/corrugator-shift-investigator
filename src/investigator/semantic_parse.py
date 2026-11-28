@@ -817,6 +817,11 @@ def _read(reading, text, context, store, mdl):
             said = words if span else unread[0].strip()
             offers = _unread_offers(reading, agent.correct_typos(text.lower()),
                                     r'\b' + r'[\s-]+'.join(re.escape(t) for t in re.split(r'[\s-]+', said)) + r'\b', context, store, mdl)
+        if words.lower() in {w['label'].lower() for name, w in mdl.windows.items() if name in semantic.TO_DATE}:
+            # the period to date is a window of the model since #189, which the verified examples read and this parser does not yet
+            # (issue #172): never "not a window the semantic model reads" (the reviewer subagent's check of the catch-up with main)
+            raise Refused(f"'{words}' is a window the semantic model holds that the offline router does not read yet (issue #172): "
+                          f"{WINDOWS_READ.replace('the windows are', 'the windows it reads are')}", offers)
         raise Refused(f"'{words}' is not a window the semantic model reads: {WINDOWS_READ}", offers)
     named, said_windows = set(), lower
     for m in re.finditer(r"\b(" + '|'.join(agent.MONTH_NAMES) + r")\b", lower):

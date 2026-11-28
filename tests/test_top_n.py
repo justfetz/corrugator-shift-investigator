@@ -753,7 +753,13 @@ def test_two_months_said_short_read_as_the_pair_said_in_full(said, read):
 DATE_FAMILY = ['for sept the 10th', 'in sep, 10th', 'on the 3rd in aug', 'the 10th in sep', 'on the 10th in sep', 'in sep, week of the 7th',
                'in sep the 10th', 'in sep (10th)', 'in sep: 10', 'in sep - 10', 'in sep-10', 'in sep/10', 'for sept., 10', 'in sep on 10',
                'in sep around the 10th', 'in sep around 10', 'the 7th through the 11th in sep', 'from the 7th to the 11th in sep',
-               'in sep, the 10th', 'for aug, the 3rd', 'in aug on the 3rd', '3rd in aug', 'in sep.10', 'in sept on the 10th']
+               'in sep, the 10th', 'for aug, the 3rd', 'in aug on the 3rd', '3rd in aug', 'in sep.10', 'in sept on the 10th',
+               # the reviewer subagent's check of 269a28e: forms it still read as the month
+               'in sep the tenth', 'on the third in aug', 'on the second in aug', 'in aug on the second', 'in sep \u2013 10th',
+               'in sep \u2014 10th', 'in sep; 10th', 'in sep #10', 'in sep from the 7th to the 11th', 'in sep up to the 10th',
+               'in sep until the 10th', 'in sep before the 10th', 'in sep after the 10th', 'in sep between the 7th and 11th',
+               'in sep on day 10', 'in sep, during the week of the 7th', 'in sep, for the week of the 7th', 'on the 3rd day in aug',
+               'the 3rd week in aug', 'for sep and aug 3', 'in sep 2026, the 10th']
 
 
 @pytest.mark.parametrize('said', DATE_FAMILY)
@@ -771,7 +777,16 @@ def test_a_month_with_punctuation_or_the_before_its_day_is_a_named_date(said):
 
 @pytest.mark.parametrize('said, read', [('in sept', 'in september'), ('last mo', 'last month'), ('sep 2026', 'september 2026'),
                                         ('shift 2 in sept', 'shift 2 in september'), ('in sept on the 2nd shift', 'in september on the 2nd shift'),
-                                        ('top 3 in aug', 'top 3 in august'), ('on shift 2 for aug', 'on shift 2 for august')])
+                                        ('top 3 in aug', 'top 3 in august'), ('on shift 2 for aug', 'on shift 2 for august'),
+                                        # the reviewer subagent's check of 269a28e: a number that is not a day's keeps the month
+                                        ('stops on splicer 3 in aug', 'stops on splicer 3 in august'),
+                                        ('trim for web width 95 in aug', 'trim for web width 95 in august'),
+                                        ('downtime for shifts 1 and 2 in aug', 'downtime for shifts 1 and 2 in august'),
+                                        ('downtime shift 1 vs 2 in aug', 'downtime shift 1 vs 2 in august'),
+                                        ('downtime shift #2 in sep', 'downtime shift #2 in september'),
+                                        ('downtime in aug, 2nd and 3rd shift', 'downtime in august, 2nd and 3rd shift'),
+                                        ('downtime in aug, 3 biggest reasons', 'downtime in august, 3 biggest reasons'),
+                                        ('downtime shift 2, sep 2026', 'downtime shift 2, september 2026')])
 def test_a_shift_or_a_ranking_number_beside_a_short_month_is_no_day(said, read):
     """... while a shift's number, or one after a word of NOT_A_DAY, is never a day's: the month is read as at 161eabb."""
     from investigator import agent

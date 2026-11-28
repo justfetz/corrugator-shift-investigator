@@ -27141,9 +27141,9 @@
    "reviewed_by": "owner-pending",
    "question": "downtime PTD",
    "expect": {
-    "raises": "^'period to date' is not a window the semantic model reads: the windows are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\. Did you mean 'downtime year to date'\\?$"
+    "raises": "^'period to date' is a window the semantic model holds that the offline router does not read yet \\(issue #172\\): the windows it reads are the production day, the Mon-Fri week, the calendar month, the 4-4-5 period and the year to date\\. Did you mean 'downtime year to date'\\?$"
    },
-   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: 'PTD' is the period to date, a window the model does not read: 69d8a15 and main answered the selected day's review, 2.88%."
+   "note": "Issue #185, the coordinator's review of PR #186 at 69d8a15 (round 2), item 5: 'PTD' is the period to date, a window the model does not read: 69d8a15 and main answered the selected day's review, 2.88%. Since the catch-up with main (#189 added the period to date to the model), the refusal says the model holds the window and the offline router does not read it yet (issue #172), never that the model does not read it (the reviewer subagent's check)."
   },
   {
    "id": "top-n-q-dash-3-refused",
@@ -29013,6 +29013,293 @@
     "status": "complete"
    },
    "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-the-tenth",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep the tenth",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; refused, as on main."
+  },
+  {
+   "id": "top-n-date-msf-in-sep-the-tenth",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf in Sep the tenth",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=grade",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; main's answer."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-dash-10th",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep – 10th",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; refused, as on main."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-from-the-7th-to-the-11th",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep from the 7th to the 11th",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; refused, as on main."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-on-day-10",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep on day 10",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; refused, as on main."
+  },
+  {
+   "id": "top-n-date-trim-on-the-3rd-day-in-aug",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim on the 3rd day in Aug",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; refused, as on main."
+  },
+  {
+   "id": "top-n-date-trim-for-sep-and-aug-3",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim for Sep and Aug 3",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; refused, as on main."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-2026-the-10th",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep 2026, the 10th",
+   "expect": {
+    "raises": "^'2026' is not a window"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; refused, as on main."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-during-the-week-of-the-7th",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep, during the week of the 7th",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; main's answer."
+  },
+  {
+   "id": "top-n-date-how-many-stops-on-splicer-3-in-aug",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many stops on splicer 3 in Aug",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=2026-08&metric=stops&place=splicer-3",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+  },
+  {
+   "id": "top-n-date-trim-for-web-width-95-in-aug",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim for web width 95 in Aug",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=trim_sqft&window=2026-08&web_width=95",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+  },
+  {
+   "id": "top-n-date-downtime-for-shifts-1-and-2-in-aug",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime for shifts 1 and 2 in Aug",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+  },
+  {
+   "id": "top-n-date-downtime-in-aug-2nd-and-3rd-shift",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Aug, 2nd and 3rd shift",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+  },
+  {
+   "id": "top-n-date-downtime-shift-2-sep-2026",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime shift 2, Sep 2026",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=2026-09",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+  },
+  {
+   "id": "top-n-date-waste-breakdown-on-splicer-3-in-august",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "waste breakdown on splicer 3 in August",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=2026-08",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+  },
+  {
+   "id": "top-n-date-downtime-in-aug-3-biggest-reasons",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Aug, 3 biggest reasons",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+  },
+  {
+   "id": "top-n-date-trim-for-sept-the-10th-all-shifts",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim for Sept the 10th",
+   "scope": "day",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-10th-all-shifts",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep, 10th",
+   "scope": "day",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-trim-on-the-3rd-in-aug-all-shifts",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim on the 3rd in Aug",
+   "scope": "day",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-trim-the-10th-in-sep-all-shifts",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim the 10th in Sep",
+   "scope": "day",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-downtime-on-the-10th-in-sep-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime on the 10th in Sep",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-msf-for-sept-the-10th-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf for Sept the 10th",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=grade",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-speed-for-sept-the-10th-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed for Sept the 10th",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
+  },
+  {
+   "id": "top-n-date-downtime-in-sep-week-of-the-7th-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Sep, week of the 7th",
+   "scope": "day",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. The coordinator's question asked under All (the reviewer subagent's check of 269a28e: the goldens pinned the selected shift only); main's answer."
   }
  ]
 }

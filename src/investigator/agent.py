@@ -881,15 +881,27 @@ MONTH_LEAD = r"(?:in|for|during|since|through|thru|from|to|until|till|over|acros
 # the lead alone (the reviewer's check of round 3: "msf Sept vs Aug" answered August's MSF, which main refused)
 MONTH_JOIN = r"(?:\s+(?:and|or|vs\.?|versus|to|than|against|compared\s+(?:to|with))\s+|\s*[,&]\s*)"
 # ... said with punctuation or "the" between the month and the day's number ("Sept the 10th", "Sep, 10th", "Sep (10th)", "Sep: 10",
-# "Sep - 10", "Sep/10", "Sept., 10", "Sep on 10", "Sep around the 10th", "Sep, week of the 7th"), or with the day's number before the
-# word that leads the month ("on the 3rd in Aug", "the 10th in Sep", "the 7th through the 11th in Sep"), it is a named date too (the
-# coordinator's review of PR #186 at 161eabb: each answered the whole month, where main refused or answered the page's window). A
-# shift's number is never a day's ("in Sep on the 2nd shift"), nor one after a word of NOT_A_DAY ("shift 2 in Sep", "top 3 in Sep").
-DAY_GAP = r"[\s,.:/()-]*"                                                # what may stand between a month and its day's number
-DAY_NUMBER = r"\d{1,2}(?:st|nd|rd|th)?\b(?!\s*(?:shifts?|crews?)\b)"
-DAY_BESIDE = (DAY_GAP + r"(?:(?:on|around)\s+)?(?:the\s+)?(?:week\s+of\s+(?:the\s+)?)?" + DAY_NUMBER)   # "Sep 10", "Sept the 10th"
-DAY_BEFORE = r"\b" + DAY_NUMBER + DAY_GAP + r"(?:of\s+)?$"              # "10 Sep", "10th of Sep", "the 10th, Sep": before the month
-DAY_BEFORE_LEAD = r"\b" + DAY_NUMBER + DAY_GAP + r"$"                    # "the 10th in Sep": before the word that leads the month
+# "Sep - 10", "Sep/10", "Sept., 10", "Sep on 10", "Sep around the 10th", "Sep, week of the 7th", "Sep the tenth", "Sep from the 7th to
+# the 11th", "Sep on day 10"), or with a day before the word that leads the month ("on the 3rd in Aug", "the 10th in Sep", "the 7th
+# through the 11th in Sep", "the 3rd day in Aug"), it is a named date too (the coordinator's review of PR #186 at 161eabb: each answered
+# the whole month, where main refused or answered the page's window). A shift's or a crew's number is never a day's ("in Sep on the 2nd
+# shift", "in Aug, 2nd and 3rd shift"), nor a ranking's ("in Aug, 3 biggest reasons"), nor one after a word of NOT_A_DAY ("shift 2 in
+# Sep", "top 3 in Sep"); and before the lead only a number said as a day is one ("the 3rd", "on 10", "day 10"), never a splicer's, a
+# web width's or a list of shifts ("on splicer 3 in Aug", "web width 95 in Aug", "shifts 1 and 2 in Aug": the reviewer's check).
+DAY_GAP = r"[\s,.:;/()#\u2013\u2014-]*"                                  # what may stand between a month and its day's number
+ORDINAL_WORDS = (r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|"
+                 r"sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty[\s-](?:first|second|third|fourth|fifth|sixth|seventh|"
+                 r"eighth|ninth)|thirtieth|thirty[\s-]first)\b")
+NOT_SHIFT = r"(?!(?:\s*(?:,|and|&|or|to|-)\s*\d{1,2}(?:st|nd|rd|th)?)*\s*(?:shifts?|crews?)\b)"   # "2nd shift", "2nd and 3rd shift"
+NOT_COUNT = r"(?!\s*(?:biggest|worst|best|largest|smallest|most|least|top|bottom|highest|lowest|reasons?|grades?)\b)"   # "3 biggest reasons"
+DAY_NUMBER = r"\d{1,2}(?:st|nd|rd|th)?\b" + NOT_SHIFT + NOT_COUNT
+DAY_SAID = r"(?:\d{1,2}(?:st|nd|rd|th)?\b|" + ORDINAL_WORDS + r")" + NOT_SHIFT + NOT_COUNT   # a day's number in digits or in words
+DAY_LEAD = r"(?:(?:on|around|from|until|till|before|after|up\s+to|between|through|thru|during|in|for)\s+)"   # "Sep from the 7th"
+DAY_BESIDE = (DAY_GAP + DAY_LEAD + r"?(?:the\s+)?(?:week\s+of\s+(?:the\s+)?)?(?:day\s+)?" + DAY_SAID)   # "Sep 10", "Sept the 10th"
+# ... a day said before a month or its lead: an ordinal ("3rd", "the third"), or a number after the, on or day ("on 10", "day 10")
+DAY_LIKE = (r"(?:\b(?:the|on|day)\s+" + DAY_SAID + r"|\b\d{1,2}(?:st|nd|rd|th)\b" + NOT_SHIFT + r")(?:\s+(?:day|week))?")
+DAY_BEFORE = r"(?:\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?|" + DAY_LIKE + DAY_GAP + r"(?:of\s+)?)$"   # "10 Sep", "the 10th, Sep"
+DAY_BEFORE_LEAD = DAY_LIKE + DAY_GAP + r"$"                                  # "the 10th in Sep": before the word that leads the month
 
 
 def day_before(text, pattern):
@@ -908,8 +920,11 @@ def read_shorthand(lower):
     if 'pattern' not in _SHORTHAND:
         _SHORTHAND['pattern'] = re.compile(r"(?<![\w-])(" + '|'.join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")(?![\w-])") if words else None
         said = '|'.join(re.escape(w) for w in sorted(months, key=len, reverse=True)) or '(?!)'
-        _SHORTHAND['months'] = re.compile(rf"\b(?P<lead>{MONTH_LEAD}\s+)(?P<m>{said})\b(?!{DAY_BESIDE})"
-                                          rf"|\b(?P<y>{said})\b(?=\.?\s*,?\s*(?:19|20)\d\d\b)")
+        # never beside a day's number, nor before a month joined to one ("Sep and Aug 3") or a year followed by one ("Sep 2026, the 10th")
+        joined_day = rf"(?:{MONTH_JOIN}(?:{said}|{MONTH_WORDS[1:-1]})\b{DAY_BESIDE})"
+        year_day = rf"(?:\.?\s*,?\s*(?:19|20)\d\d\b{DAY_BESIDE})"
+        _SHORTHAND['months'] = re.compile(rf"\b(?P<lead>{MONTH_LEAD}\s+)(?P<m>{said})\b(?!{DAY_BESIDE}|{joined_day}|{year_day})"
+                                          rf"|\b(?P<y>{said})\b(?=\.?\s*,?\s*(?:19|20)\d\d\b)(?!{year_day})")
         said = '|'.join(re.escape(w) for w in sorted(relative, key=len, reverse=True)) or '(?!)'
         _SHORTHAND['relative'] = re.compile(rf"(?<![\w-])(?P<lead>(?:this|last|next)\s+)(?P<w>{said})(?![\w-])")
     if _SHORTHAND['pattern'] is not None:
@@ -954,7 +969,8 @@ YEAR_MONTH = r"\b(?P<year>(?:19|20)\d\d)\s*,?\s+(?P<month>" + MONTH_WORDS[1:-1] 
 # the month it names (the coordinator's review of PR #186 at 9d12f76, item 2)
 # ... with punctuation or "the" between ("September the 10th", "August, 3rd", "September (10th)"), or the day's number before the word
 # that leads the month ("on the 3rd in August": DAY_BESIDE, DAY_BEFORE_LEAD)
-NAMED_DATE = (r"\b" + DAY_NUMBER + DAY_GAP + r"(?:(?:of|" + MONTH_LEAD[3:-1] + r")\s+)?" + MONTH_WORDS + r"\b|\b" + MONTH_WORDS + DAY_BESIDE)
+NAMED_DATE = (r"(?:\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?|" + DAY_LIKE + DAY_GAP + r"(?:(?:of|" + MONTH_LEAD[3:-1] + r")\s+)?)"
+              + MONTH_WORDS + r"\b|\b" + MONTH_WORDS + r"(?:\.?\s*,?\s*(?:19|20)\d\d\b)?" + DAY_BESIDE)   # "September 2026, the 10th" too
 # A number before a month's name that is a shift's, a ranking's or a period's, never a day ("downtime shift 2 September 2026", "top 10
 # August 2026 downtime reasons": the reviewer's check of round 2)
 NOT_A_DAY = r"\b(?:shifts?|top|bottom|crews?|p|first|last|next|best|worst)\s*$"
