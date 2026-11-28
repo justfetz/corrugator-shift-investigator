@@ -25,7 +25,7 @@ import re
 from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
 from . import cost_model
 from .records import stop_label
-from .semantic import TOOL as SEMANTIC_TOOL, _same as same_value
+from .semantic import TOOL as SEMANTIC_TOOL, DEFAULT_LIMIT as SEMANTIC_DEFAULT_LIMIT, YTD as SEMANTIC_YTD, _same as same_value
 
 LOOK = 'Where to look'
 # `(query 2 · row 0)`, `(query 3)`: the evidence a bullet or headline cites.
@@ -1138,7 +1138,7 @@ class PeriodAnswer:
             return ''
         if not window['start'] <= self.context.production_day <= window['end']:
             return None
-        return {'week': ' this week', 'month': ' this month', 'fiscal': ' this period'}.get(window['period'], '')
+        return {'week': ' this week', 'month': ' this month', 'fiscal': ' this period', 'ytd': ' year to date'}.get(window['period'], '')
 
     def sfx(self, data):
         return f' for shift {data["shift"]}' if self.context.scope == 'day' and data.get('shift') else ''
@@ -1975,6 +1975,7 @@ GROUP_NOUNS = {'grade': 'board grade', 'wet_end': 'paper run', 'web_width': 'web
 SEMANTIC_LOOKS = {'stop': ('pareto', 'stops'), 'reject': ('waste', 'grade'), 'lane': ('overrun', 'grade'),
                   'shift': ('waste', 'stops'), 'setup': ('grade', 'speed'), 'setup waste': ('waste', 'grade'),
                   'roll': ('rollstock', 'waste')}   # peel, core and the paper consumed (issue #187): the paper runs' rollstock
+YTD_LOOKS = ('pareto', 'grade', 'stops')   # the looks a year-to-date card offers: the ones the semantic model reads over it
 
 
 def semantic_figure(value, unit):
@@ -2097,9 +2098,8 @@ class SemanticAnswer:
     def apart(data):
         """The rows a ranking of stops never leads with (the owner, docs/METRICS.md): planned maintenance (schedule-driven) and
         external downtime (a power outage), when their lever is not the measure's own. Their indices; empty for any other entity."""
-        if data.get('entity') != 'stop':
-            return set()
-        return {i for i, r in enumerate(data['rows']) if r.get('lever') in ('schedule-driven', 'external') and r.get('lever') != data.get('lever')}
+        from .semantic import set_apart   # the one rule, which the query's limit also counts by (the review of PR #186, item 5)
+        return {i for i, r in enumerate(data['rows']) if set_apart(data.get('entity'), r.get('lever'), data.get('lever'))}
 
     @staticmethod
     def names(labels, every=False):
@@ -2199,11 +2199,28 @@ class SemanticAnswer:
             what += f', {re.sub(r"\s*\(.*\)$", "", f["label"]).lower()} {f["text"]}'
         if data['group_by']:
             what += ' by ' + ' and '.join(GROUP_NOUNS.get(d, d.replace('_', ' ')) for d in data['group_by'])
-        parts = [what, data['window']['label'], f'shift {data["shift"]}' if data.get('shift') else 'all shifts']
+        parts = [what]
+        default = self.ranked_by_default(data) if self.lead.get('rank') and self.lead.get('default') else None
+        if default:
+            # issue #185: a ranking of a dimension by the measure the model ranks it by when none is named
+            parts.append(f'ranked by {default} (the plant\'s default)')
+        parts += [data['window']['label'], f'shift {data["shift"]}' if data.get('shift') else 'all shifts']
         if self.lead.get('rank'):
             parts.append(('largest' if self.lead['rank'] == 'most' else 'smallest') + ' first')
         limit = data['query'].get('limit')
-        if limit is not None and limit < data['groups'] and limit <= data['rows_shown']:
+        if self.lead.get('rank') and limit is not None and (limit != SEMANTIC_DEFAULT_LIMIT or self.lead.get('top')):
+            # a ranking of N rows asked says so (issue #185: "top 5", "top 30"), and how many the window holds when that is fewer
+            # (Codex on PR #186: N at or above the default limit was read as "the first N", or not at all; "top 25", the default limit
+            # itself, is carried as lead['top'], the review of PR #186, item 3)
+            # ... and how many of its rows rank when that is fewer than N and some are set apart ("top 9 (the window holds 8 that rank)":
+            # planned maintenance and a power outage are listed apart, never counted in N; the reviewer's check of this round)
+            ranked = data.get('ranked_groups')
+            if ranked is not None and ranked < data['groups'] and ranked < limit:
+                held = f' (the window holds {n(ranked)} that rank)'
+            else:
+                held = '' if limit < data['groups'] else f' (the window holds {n(data["groups"])})' if data['groups'] < limit else ''
+            parts.append(f'{"top" if self.lead["rank"] == "most" else "bottom"} {n(limit)}' + held)
+        elif limit is not None and limit < data['groups'] and limit <= data['rows_shown']:
             parts.append(f'the first {n(limit)}')
         if data.get('share_row') is not None:
             parts.append(f'the share of {data["rows"][data["share_row"]]["label"]}')
@@ -2215,6 +2232,19 @@ class SemanticAnswer:
         if data.get('previous_window'):
             parts.append(f'against {data["previous_window"]["label"]}')
         return 'Read as: ' + ', '.join(parts) + '.'
+
+    @staticmethod
+    def ranked_by_default(data):
+        """The words of the measure a ranking of its one dimension reads when the question names none (the model's `rank_by`,
+        issue #185: `downtime minutes` for the stop reasons), when this query ranks by it; else None."""
+        from .semantic import model
+        if len(data.get('group_by') or []) != 1:
+            return None
+        rank_by = model().dimensions[data['group_by'][0]].get('rank_by') or {}
+        if rank_by.get('measure') != data.get('measure'):
+            return None
+        m = model().measures[data['measure']]
+        return f'{re.sub(r"\s*\(.*\)$", "", m["label"]).lower()} {"minutes" if m["unit"] == "min" else m["unit"]}'
 
     @staticmethod
     def cut_note(data):
@@ -2260,6 +2290,10 @@ class SemanticAnswer:
         if wp is None:
             return []
         kinds = SEMANTIC_LOOKS[data['entity'] + (' waste' if data['entity'] == 'setup' and data['unit'] in ('sq ft', '% of gross', '$') else '')]
+        if (data.get('query') or {}).get('window', {}).get('period') == SEMANTIC_YTD:
+            # over the year to date only the looks the semantic model answers: no hand route reads it (issue #185), so the waste
+            # breakdown, the grades against target and the over/under-run by knife would be refused (the reviewer's check of PR #186)
+            kinds = tuple(k for k in kinds if k in YTD_LOOKS)
         sfx += ' on this shift' if self.context.scope == 'shift' else ''   # a number keeps a one-shift card's scope (the owner's scope ruling)
         questions = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}?'),
                      'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}'),

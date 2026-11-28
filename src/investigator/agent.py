@@ -863,6 +863,272 @@ UNREAD_WINDOW = (WINDOW_OF + r"|\b(last|previous|prior|past|same|first)\s+(produ
                  r"|\b(so|thus)\s+far\b|\b(up\s+)?(to|until|till)\s+now\b|\bas\s+of\s+(now|today)\b")
 WINDOW_TEXT = ("'{words}' is not a window the router reads: one quantity reads the selected production day or yesterday, a Mon-Fri "
                "week, a calendar month or a 4-4-5 period. Ask '{plain} this week', '{plain} this month' or '{plain} last week'.")
+
+
+# Window words said short ("last wk", "in Sept", "PTD", "Q-3", "3Q"): the semantic model's `windows.shorthand` entries, read as the
+# words they shorten by every route, the hand router's and the parser's alike, before any window is read (the coordinator's review of
+# PR #186, round 2, item 5: each answered the selected day, this week or this month)
+_SHORTHAND = {}
+
+
+# ... a month said short ("Aug", "Sep", "Dec") only where a window stands: right after a word that leads one ("in Aug", "for Sept",
+# "during Jul", "versus Jul") or before a year ("Dec 2025"), never "the dec in speed", "did trim inc or dec" or "the current apr" (the
+# reviewer's re-check of round 2), and never beside a day's number: "7 Sep", "Sep 10", "the week of 7 Aug" and "1 Aug to 14 Aug" are
+# named dates (#188), never the whole month, and "end of Aug" or "mid Sep" is part of one (the coordinator's review of PR #186 at
+# 9d12f76, item 2: each answered the month)
+MONTH_LEAD = r"(?:in|for|during|since|through|thru|from|to|until|till|over|across|versus|vs\.?|than|between|compare|month\s+of)"
+# ... and beside a month read, joined or compared ("Sept vs Aug", "trim for Aug and Sep", "Aug vs Jul"): both months, never the one with
+# the lead alone (the reviewer's check of round 3: "msf Sept vs Aug" answered August's MSF, which main refused)
+MONTH_JOIN = r"(?:\s+(?:and|or|vs\.?|versus|to|than|against|compared\s+(?:to|with))\s+|\s*[,&]\s*)"
+# ... said with punctuation or "the" between the month and the day's number ("Sept the 10th", "Sep, 10th", "Sep (10th)", "Sep: 10",
+# "Sep - 10", "Sep/10", "Sept., 10", "Sep on 10", "Sep around the 10th", "Sep, week of the 7th", "Sep the tenth", "Sep from the 7th to
+# the 11th", "Sep on day 10"), or with a day before the word that leads the month ("on the 3rd in Aug", "the 10th in Sep", "the 7th
+# through the 11th in Sep", "the 3rd day in Aug"), it is a named date too (the coordinator's review of PR #186 at 161eabb: each answered
+# the whole month, where main refused or answered the page's window). A shift's or a crew's number is never a day's ("in Sep on the 2nd
+# shift", "in Aug, 2nd and 3rd shift"), nor a ranking's ("in Aug, 3 biggest reasons"), nor one after a word of NOT_A_DAY ("shift 2 in
+# Sep", "top 3 in Sep"); and before the lead only a number said as a day is one ("the 3rd", "on 10", "day 10"), never a splicer's, a
+# web width's or a list of shifts ("on splicer 3 in Aug", "web width 95 in Aug", "shifts 1 and 2 in Aug": the reviewer's check).
+DAY_GAP = r"[\s,.:;/()#\u2013\u2014-]*"                                  # what may stand between a month and its day's number
+ORDINAL_WORDS = (r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|"
+                 r"sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty[\s-](?:first|second|third|fourth|fifth|sixth|seventh|"
+                 r"eighth|ninth)|thirtieth|thirty[\s-]first)\b")
+# "2nd shift", "2nd and 3rd shift", "second and third shifts", "the 1st and second shift"
+NOT_SHIFT = (r"(?!(?:\s*(?:,|and|&|or|to|-)\s*(?:the\s+)?(?:\d{1,2}(?:st|nd|rd|th)?\b|" + ORDINAL_WORDS + r"))*\s*(?:shifts?|crews?)\b)")
+NOT_COUNT = (r"(?!\s*(?:biggest|worst|best|largest|smallest|longest|shortest|slowest|fastest|most|least|top|bottom|highest|lowest|"
+             r"reasons?|grades?|stops?|setups?|minutes?|mins?)\b)")   # "3 biggest reasons", "the 5 longest"
+DAY_NUMBER = r"\d{1,2}(?:st|nd|rd|th)?\b" + NOT_SHIFT + NOT_COUNT
+DAY_SAID = r"(?:\d{1,2}(?:st|nd|rd|th)?\b|" + ORDINAL_WORDS + r")" + NOT_SHIFT + NOT_COUNT   # a day's number in digits or in words
+DAY_LEAD = r"(?:(?:on|around|from|until|till|before|after|up\s+to|between|through|thru|during|in|for)\s+)"   # "Sep from the 7th"
+# ... said right after the month ("Sep 10", "Sept 10th top 5 reasons") as 161eabb read it, whatever follows; said with a gap ("Sept the
+# 10th", "Sep, 10th"), never a list of shifts or a ranking's count ("Aug, 2nd and 3rd shift", "Aug, the 5 longest")
+DAY_BESIDE = (r"(?:\.?\s*\d{1,2}(?:st|nd|rd|th)?\b|" + DAY_GAP + DAY_LEAD + r"?(?:the\s+)?(?:week\s+of\s+(?:the\s+)?)?(?:day\s+)?"
+              + DAY_SAID + ")")
+# ... a day said before a month or its lead: an ordinal ("3rd", "the third"), or a number after the, on or day ("on 10", "day 10")
+DAY_LIKE = (r"(?:\b(?:the|on|day)\s+" + DAY_SAID + r"|\b\d{1,2}(?:st|nd|rd|th)\b" + NOT_SHIFT + r")(?:\s+(?:day|week))?")
+DAY_BEFORE = r"(?:\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?|" + DAY_LIKE + DAY_GAP + r"(?:of\s+)?)$"   # "10 Sep", "the 10th, Sep"
+DAY_BEFORE_LEAD = DAY_LIKE + DAY_GAP + r"$"                                  # "the 10th in Sep": before the word that leads the month
+
+
+def day_before(text, pattern):
+    """True when `text` ends on a day's number (`pattern`: DAY_BEFORE before a month, DAY_BEFORE_LEAD before the word that leads one),
+    never a shift's, a ranking's or a period's number (NOT_A_DAY: "shift 2 in Sep", "top 3 in Sep")."""
+    found = re.search(pattern, text)
+    return bool(found) and not re.search(NOT_A_DAY, text[:found.start()])
+
+
+def read_shorthand(lower):
+    """`lower` with each window word said short replaced by the words it shortens (semantic_model.json, windows.shorthand), each
+    month said short (windows.shorthand.months) where a window stands, and each word said short after this, last or next
+    (windows.shorthand.relative: "last mo") as the window it shortens."""
+    model = semantic.model()
+    words, months, relative = model.shorthand, model.short_months, getattr(model, 'relative_shorthand', {})
+    if 'pattern' not in _SHORTHAND:
+        _SHORTHAND['pattern'] = re.compile(r"(?<![\w-])(" + '|'.join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")(?![\w-])") if words else None
+        said = '|'.join(re.escape(w) for w in sorted(months, key=len, reverse=True)) or '(?!)'
+        # never beside a day's number, nor before a month joined to one ("Sep and Aug 3") or a year followed by one ("Sep 2026, the 10th")
+        joined_day = rf"(?:{MONTH_JOIN}(?:{said}|{MONTH_WORDS[1:-1]})\b{DAY_BESIDE})"
+        year_day = rf"(?:\.?\s*,?\s*(?:19|20)\d\d\b{DAY_BESIDE})"
+        _SHORTHAND['months'] = re.compile(rf"\b(?P<lead>{MONTH_LEAD}\s+)(?P<m>{said})\b(?!{DAY_BESIDE}|{joined_day}|{year_day})"
+                                          rf"|\b(?P<y>{said})\b(?=\.?\s*,?\s*(?:19|20)\d\d\b)(?!{year_day})")
+        said = '|'.join(re.escape(w) for w in sorted(relative, key=len, reverse=True)) or '(?!)'
+        _SHORTHAND['relative'] = re.compile(rf"(?<![\w-])(?P<lead>(?:this|last|next)\s+)(?P<w>{said})(?![\w-])")
+    if _SHORTHAND['pattern'] is not None:
+        lower = _SHORTHAND['pattern'].sub(lambda m: words[m[1]], lower)
+    lower = _SHORTHAND['relative'].sub(lambda m: m['lead'] + relative[m['w']], lower)
+
+    def month(m):
+        if m['m']:
+            if day_before(m.string[:m.start()], DAY_BEFORE_LEAD):
+                return m[0]   # "on the 3rd in Aug": a named date, never the month
+            return m['lead'] + months[m['m']]
+        return m[0] if re.search(DAY_BEFORE, m.string[:m.start()]) else months[m['y']]   # "10 Sep 2026" is a named date
+    lower = _SHORTHAND['months'].sub(month, lower)
+    if 'joined' not in _SHORTHAND:
+        said = '|'.join(re.escape(w) for w in sorted(months, key=len, reverse=True)) or '(?!)'
+        _SHORTHAND['joined'] = (re.compile(rf"\b(?P<a>{MONTH_WORDS[1:-1]})\b(?P<c>{MONTH_JOIN})(?P<m>{said})\b(?!{DAY_BESIDE})"),
+                                re.compile(rf"\b(?P<m>{said})\b(?P<c>{MONTH_JOIN})(?P<a>{MONTH_WORDS[1:-1]})\b(?!{DAY_BESIDE})"))
+
+    def joined(m):   # neither month beside a day's number ("3 august and sep", "sep and august 3" stay as said)
+        first = m.start('a') if m.start('a') < m.start('m') else m.start('m')
+        if re.search(DAY_BEFORE, m.string[:first]):
+            return m[0]
+        return (m['a'] + m['c'] + months[m['m']]) if m.start('a') < m.start('m') else (months[m['m']] + m['c'] + m['a'])
+    for _ in range(4):   # "aug, sep and oct": each month joined to one read
+        read = _SHORTHAND['joined'][1].sub(joined, _SHORTHAND['joined'][0].sub(joined, lower))
+        if read == lower:
+            break
+        lower = read
+    return lower
+
+
+# A year said beside a month's name ("September 2026", "December, 2025", "August of 2025"): the month of that year (the coordinator's
+# review of PR #186, round 2, item 1). A month's name reads the latest month of that name on or before the selected day (issue #35), so
+# the year that is that month's is read away and every route answers the month as before; another year is refused naming the pair,
+# never answered as the month the name reads. A day said with the month ("10 September 2026", "September 10, 2026") is a named date,
+# left as it is; a year said alone stays refused (semantic_parse.UNREAD_WINDOW).
+MONTH_YEAR = (r"\b(?:(?P<before>\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?)?(?P<month>" + MONTH_WORDS[1:-1] + r")\b\.?"
+              r"(?:\s+(?P<after>\d{1,2})(?:st|nd|rd|th)?\b)?\s*,?\s+(?:of\s+)?(?P<year>(?:19|20)\d\d)\b")
+# ... and the year said first ("2026 September"), never before a day ("2026 September 10" is a named date)
+YEAR_MONTH = r"\b(?P<year>(?:19|20)\d\d)\s*,?\s+(?P<month>" + MONTH_WORDS[1:-1] + r")\b(?!\s+\d)"
+# A day's number beside a month's name ("3 August", "the 3rd of August", "August 3", "Aug 3rd"): a named date, which #188 reads, never
+# the month it names (the coordinator's review of PR #186 at 9d12f76, item 2)
+# ... with punctuation or "the" between ("September the 10th", "August, 3rd", "September (10th)"), or the day's number before the word
+# that leads the month ("on the 3rd in August": DAY_BESIDE, DAY_BEFORE_LEAD)
+NAMED_DATE = (r"(?:\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?|" + DAY_LIKE + DAY_GAP + r"(?:(?:of|" + MONTH_LEAD[3:-1] + r")\s+)?)"
+              + MONTH_WORDS + r"\b|\b" + MONTH_WORDS + r"(?:\.?\s*,?\s*(?:19|20)\d\d\b)?" + DAY_BESIDE)   # "September 2026, the 10th" too
+# A number before a month's name that is a shift's, a ranking's or a period's, never a day ("downtime shift 2 September 2026", "top 10
+# August 2026 downtime reasons": the reviewer's check of round 2)
+NOT_A_DAY = r"\b(?:shifts?|top|bottom|crews?|p|first|last|next|best|worst)\s*$"
+
+
+def named_date(lower):
+    """True when `lower` says a day's number beside a month's name (NAMED_DATE), never a shift's, a ranking's or a period's number
+    before it ("waste breakdown shift 2 August", "trim top 3 August": the reviewer's check of round 3)."""
+    return any(not (m[0][0].isdigit() and re.search(NOT_A_DAY, lower[:m.start()])) for m in re.finditer(NAMED_DATE, lower))
+
+
+def month_years(lower, anchor, first_day=None):
+    """`lower` with the year beside a month's name read away when it is the year that name reads from `anchor` (the selected day);
+    Standing naming the pair when it is another year (before the records when `first_day`, the store's first production day, is
+    after the month). A named date (a day beside the month) is left unchanged."""
+    def one(m):
+        groups, text = m.groupdict(), m.string
+        if groups.get('after') or groups.get('before') and not re.search(NOT_A_DAY, text[:m.start()]):
+            return m[0]   # a named date ("10 September 2026", "September 10, 2026")
+        keep = text[m.start():m.start('month')] if groups.get('before') else ''   # "shift 2 " before the month is the shift's
+        said = re.sub(r"\s+", ' ', text[m.start() + len(keep):m.end()]).strip(' ,')
+        month, year = MONTH_NAMES[m['month']], int(m['year'])
+        reads = int(anchor[:4]) - (1 if month > int(anchor[5:7]) else 0)
+        if year == reads:
+            return keep + m['month']
+        name = m['month'].capitalize()
+        if year < reads and first_day and f'{year:04d}-{month:02d}-31' < first_day:
+            raise Standing(f"'{said}' is before the records, which hold production days from {first_day}: a month's name reads the latest "
+                           f"{name} on or before the selected day, {name} {reads}.")
+        if year > reads:
+            raise Standing(f"'{said}' is after the selected day: a month's name reads the latest {name} on or before it, {name} {reads}, "
+                           f"and a question is answered up to the selected day.")
+        raise Standing(f"'{said}' is not the {name} a month's name reads: that is the latest {name} on or before the selected day, "
+                       f"{name} {reads}. To ask about {name} {year}, set the day control to a day in it and ask about '{m['month']}'.")
+    return re.sub(YEAR_MONTH, one, re.sub(MONTH_YEAR, one, lower))
+
+
+# A 4-4-5 period named by its number ("P1", "in P9"): read only as the period that holds the selected day; another number is refused
+# naming it, never answered as the selected one (the coordinator's review of PR #186, round 2, item 3: "top operator reasons P1" and
+# "downtime P1" answered P2)
+PERIOD_NUMBER = r"\bp(1[0-3]|[1-9])\b"
+# ... said in words ("fiscal period 9", "accounting period 1", "period 9"): read as "p9" by every route (the reviewer's check of round
+# 2: the number was dropped and P2 or the selected day answered), never a count of periods or a span ("period 2 weeks", "periods 1-3")
+PERIOD_SAID = (r"\b(?:(?:fiscal|accounting|4-4-5|445)\s+)?period\s+(1[0-3]|[1-9])\b(?!\s*(?:[-–]|to\b|through\b|thru\b)\s*\d)"
+               r"(?![\s-]*(?:weeks?|days?|months?|years?|shifts?|hours?|minutes?)\b)")
+
+
+def read_period_numbers(lower):
+    """`lower` with a 4-4-5 period said by its number in words ("fiscal period 9") as its P-number ("p9")."""
+    return re.sub(PERIOD_SAID, r"p\1", lower)
+
+
+# A comparison said beside two periods ("P2 vs P1", "was P2 worse than P1"); "to" only with "compare" said ("compare P2 to P1"), since
+# "from P1 to P2" is a span (the reviewer's check of round 3)
+PERIOD_COMPARED = r"\b(?:compar\w*|versus|vs\.?|against|than)\b"
+# ... and a span of periods ("from P1 to P2", "between P1 and P2", "P1 through P2", "up to P2 from P1"): two windows, never compared
+PERIOD_SPAN = (r"\b(?:from|between|since)\s+(?:the\s+)?p(?:1[0-3]|[1-9])\b|\bp(?:1[0-3]|[1-9])\s+(?:through|thru|till|until)\b"
+               r"|\bup\s+to\s+(?:the\s+)?p(?:1[0-3]|[1-9])\b")
+THIS_PERIOD = r"\b(?:this|current)\s+period\b"
+
+
+def _periods_said(lower):
+    """The 4-4-5 periods said by their number in `lower` (read_period_numbers already applied), never a span ("P1-3")."""
+    return [m for m in re.finditer(PERIOD_NUMBER, lower) if not re.match(r"\s*[-–]\s*\d", lower[m.end():])]
+
+
+def numbered_period(lower, anchor, answers=None):
+    """Standing naming a 4-4-5 period said by its number that is not the one holding `anchor` (the selected day), else None. Two
+    periods said ("P2 vs P9", "P1 vs P9", "this period vs P9") are two windows, refused naming them, unless they are the selected
+    period and the one just before it compared ("P2 vs P1", "P1 vs P2", "this period vs P1"): that refusal carries
+    `previous_beside`, and the routes that read the period before beside the selected one answer it (parse_request; the
+    coordinator's review of PR #186 at 9d12f76, item 1). `answers(question)` is True when the router answers a question: the
+    questions the refusal offers ("... last period") are only those it answers; with no `answers`, none is offered."""
+    from datetime import date
+    from .record_store import fiscal_period, previous_window
+    start, end, _, number, _ = fiscal_period(date.fromisoformat(anchor))
+    lower = read_period_numbers(lower)
+    periods = _periods_said(lower)
+    said = next((m for m in periods if int(m[1]) != number), None)
+    if said is None:
+        return None
+    asked = int(said[1])
+    held = f"P{number}, {start.day} {start.strftime('%b')}–{end.day} {end.strftime('%b')} {end.year}"
+
+    def swap(words):   # the question with the period said in words the router reads, offered only when the router answers it
+        pattern = r"\b(?:(?:in|for|during|over|across)\s+)?(?:the\s+)?(?:4-4-5\s+|accounting\s+|fiscal\s+)?" + re.escape(said[0]) + r"\b"
+        offer = re.sub(r"\s+", ' ', re.sub(pattern, f' {words} ', lower, count=1)).strip(' ?.!,')
+        return offer if answers is not None and len(periods) == 1 and answers(offer) else None   # one period said
+    if asked > 12:
+        offers = [f"'{o}'" for o in (swap('this period'), swap('last period')) if o]
+        return Standing(f"'{said[0]}' is not a 4-4-5 period: a fiscal year holds P1 to P12, and the selected day is in {held}."
+                        + (f" Ask {' or '.join(offers)}." if offers else ''))
+    before = fiscal_period(previous_window('fiscal', start, end)[0])[3]
+    numbers = {int(m[1]) for m in periods}
+    this_said = re.search(THIS_PERIOD, lower)
+    compared = bool(re.search(PERIOD_COMPARED, lower)) and not re.search(PERIOD_SPAN, lower)
+    if numbers - {number} == {before} and (number in numbers or this_said) and compared and len(periods) == len(numbers):
+        # the period just before, compared with the selected one said too ("compare P2 to P1", "top operator reasons P2 vs P1"): the
+        # route that carries the period before beside it answers it (parse_request, semantic_parse.read); the reviewer's re-check of
+        # round 2, and the coordinator's review at 9d12f76, item 1
+        offer = _pair_in_words(lower, number, before).strip(' ?.!,')
+        # ... offered only said in words, never with a period still said by its number ("was P1 worse than P2"), which would ask
+        # this refusal again (the reviewer's check of round 3: a RecursionError on "compare P2 and P1")
+        offer = offer if answers is not None and not _periods_said(offer) and answers(offer) else None
+        refusal = Standing(f"'{said[0]}' is not the 4-4-5 period that holds the selected day, {held}: a period said by its number is "
+                           f"read only as that one. " + (f"Ask '{offer}', or set" if offer else 'Set') + f" the day control to a day in P{asked}.")
+        refusal.previous_beside = True
+        return refusal
+    named = sorted([*periods, *([this_said] if this_said and number not in numbers else [])], key=lambda m: m.start())
+    named = [m for k, m in enumerate(named) if m[0] not in [n[0] for n in named[:k]]]   # "P2 vs P1 vs P1" names two
+    if len(named) >= 2:
+        # "P2 vs P9", "P1 vs P9", "P3 vs P2", "this period vs P9": two windows, refused naming them, never one of them answered alone (the
+        # coordinator's review of PR #186 at 9d12f76, item 1)
+        words = [f"'{m[0]}'" for m in named]
+        listed = ' and '.join(words) if len(words) == 2 else ', '.join(words[:-1]) + ' and ' + words[-1]
+        count = {2: 'two', 3: 'three', 4: 'four'}.get(len(words), str(len(words)))
+        return Standing(f"{listed} are {count} windows: a question reads one window, or one window against "
+                        f"the one just before it, and a 4-4-5 period said by its number is read only as the one that holds the selected day, "
+                        f"{held} (the one before it is P{before}). Ask about one period at a time, setting the day control to a day in it.")
+    offer = swap('last period') if asked == before else swap('this period')
+    ask = (f"Ask '{offer}'" + ('' if asked == before else f" for P{number}") + ", or set") if offer else 'Set'
+    return Standing(f"'{said[0]}' is not the 4-4-5 period that holds the selected day, {held}: a period said by its number is read only "
+                    f"as that one. {ask} the day control to a day in P{asked}.")
+
+
+def period_pair_words(lower, anchor):
+    """`lower` with the selected 4-4-5 period and the one just before it, said by their numbers and compared ("P2 vs P1", "P1 vs P2",
+    "this period vs P1"), said in the words the semantic model reads, "this period vs last period": the period before is the
+    comparison, never a period word that reads the selected one (the coordinator's review of PR #186 at 9d12f76, item 1). Unchanged
+    when numbered_period does not read them as that pair."""
+    from datetime import date
+    from .record_store import fiscal_period, previous_window
+    numbered = numbered_period(lower, anchor)
+    if numbered is None or not getattr(numbered, 'previous_beside', False):
+        return lower
+    start, end, _, number, _ = fiscal_period(date.fromisoformat(anchor))
+    return _pair_in_words(read_period_numbers(lower), number, fiscal_period(previous_window('fiscal', start, end)[0])[3])
+
+
+def _pair_in_words(lower, number, before):
+    """`lower` with P`number` (the selected period) and P`before` (the one just before it) said as "this period vs last period", the
+    selected one first, as the model reads a comparison: "P1 vs P2", "P2 and P1", "P2, P1", "P1 against the current period" and
+    "P2 compared with P1" alike (the reviewer's check of round 3). A pair it cannot place ("was P1 worse than P2") keeps its numbers."""
+    lead = r"(?:(?:in|for|during|over|across)\s+)?(?:the\s+)?(?:4-4-5\s+|accounting\s+|fiscal\s+)?"
+    selected = rf"(?:{lead}p{number}\b|(?:the\s+)?{THIS_PERIOD})"
+    pair = r"(?:\s+(?:versus|vs\.?|compared\s+(?:to|with)|against|to|with|and|or)\s+|\s*[,&]\s*)"
+    lower = re.sub(rf"(?<![\w-]){lead}p{before}\b{pair}{selected}", ' this period vs last period ', lower)   # the one before first
+    lower = re.sub(rf"(?<![\w-]){selected}{pair}{lead}p{before}\b", ' this period vs last period ', lower)
+    lower = re.sub(rf"\b(versus|vs\.?|compared\s+(?:to|with)|than|against|to|with)\s+{lead}p{before}\b", r"\1 last period", lower)   # "P2 go versus P1"
+    lower = re.sub(rf"(?<![\w-]){lead}p{number}\b", 'this period', lower)
+    return re.sub(r"\s+", ' ', lower).strip()
+
+
 # The measure's own words, by metric: its noun and unit, the "per <denominator>" of a kept ratio and the average a kept ratio is
 STOP_NOUN = r"\bstop(s|ped|page|pages)?\b|\b(go|goes|went|gone|going)\s+down\b"
 LAST_VERB = r"\blasts?\b(?!\s+(stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))|\blasted\b"
@@ -1811,7 +2077,14 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
                                        "shift": shift})]
         intent = 'period_stops'
     elif waste:
-        plan = [("get_waste_breakdown", {"window": window, "shift": shift})]
+        # "waste breakdown in August": that month, as "downtime in August" is, never the selected day's month (main answered September's
+        # breakdown for every month named; the probe of PR #186, round 2, found it once "August 2026" read as August). A question the
+        # semantic model reads completely ("trim in August", "is it bond or warp in August") is still its answer (semantic_parse.covers)
+        # ... but a day said beside the month ("the week of 3 August", "August 3") is a named date (#188), never the whole month: the
+        # window main read (the coordinator's review of PR #186 at 9d12f76, item 2)
+        named_month = len(set(months)) == 1 and not named_date(lower)
+        plan = [("get_waste_breakdown", {"window": {"period": "month", "anchor": month_start(months[0])} if named_month else window,
+                                         "shift": shift})]
         intent = 'period_waste'
     elif diagnose and len(set(months)) < 2:
         # "why was this shift slow this week", "were we slow in August": the overview over the window,
@@ -1887,10 +2160,12 @@ def nearest_measure(word):
 
 
 def correct_typos(lower):
-    """`lower` with each misspelt measure word replaced by the measure (MEASURE_VOCABULARY); other words unchanged."""
+    """`lower` with each misspelt measure word replaced by the measure (MEASURE_VOCABULARY), each window word said short read as
+    the words it shortens (read_shorthand) and a 4-4-5 period said by its number in words as its P-number (read_period_numbers);
+    other words unchanged."""
     from .real_words import REAL_WORDS
-    return re.sub(r"[a-z]+", lambda match: match.group(0) if match.group(0) in REAL_WORDS else
-                  (nearest_measure(match.group(0)) or match.group(0)), lower)
+    return read_period_numbers(read_shorthand(re.sub(r"[a-z]+", lambda match: match.group(0) if match.group(0) in REAL_WORDS else
+                                 (nearest_measure(match.group(0)) or match.group(0)), lower)))   # "last wk", "period 9" (PR #186, round 2)
 
 
 # ---- The question's own scope (issue #105): "How much downtime on 1st shift last week?" asked with shift 2 and
@@ -1909,7 +2184,7 @@ SHIFT_COMPARE = r"\b(compare|compared|comparing|comparison|versus|vs|against|tha
 # "The last week" is the trailing week, not the week before: it keeps the selected window, as before.
 RELATIVE_WINDOWS = (("day", r"\byesterday\b"), ("week", r"\b((?<!the )last|previous|prior)\s+week\b"),
                     ("month", r"\b((?<!the )last|previous|prior)\s+month\b"),
-                    ("fiscal", r"\b((?<!the )last|previous|prior)\s+(accounting\s+)?period\b"))
+                    ("fiscal", r"\b((?<!the )last|previous|prior)\s+(accounting\s+|fiscal\s+|4-4-5\s+)?period\b"))   # "last fiscal period" (PR #186)
 # A comparison word anywhere makes the relative window its base. "From", "over" and "since" do only right before
 # it, as #99's speed-variance cue reads them ("what drove speed since last week"); elsewhere they leave it the window
 # asked about ("downtime from maintenance last week" is 7-11 Sep from Mon 14 Sep).
@@ -1951,7 +2226,7 @@ def question_scope(text, current, days, store=None):
     production days in order."""
     if not isinstance(text, str):
         return current
-    lower = text.lower()
+    lower = read_shorthand(text.lower())   # "last wk" moves the scope as "last week" does (PR #186, round 2, item 5)
     read = {}
     shifts = named_shifts(lower)
     shift = current.shift
@@ -2121,10 +2396,29 @@ def parse_request(text, current, store=None):
     from . import semantic_parse
     request, refused = None, None
     try:
-        request = _parse_request(text, current)
+        request = _parse_request(text, current, store.production_days[0] if store and getattr(store, 'production_days', None) else None)
         catch_all_guard(correct_typos(text.lower()), request)
     except ValueError as exc:
         refused = exc
+    days = getattr(store, 'production_days', None) if store else None
+
+    def answers(question):   # the router answers a question a refusal offers, in the same controls
+        try:
+            route(question, current, days, store)
+            return True
+        except ValueError:
+            return False
+    numbered = None if isinstance(refused, Standing) or not isinstance(text, str) else \
+        numbered_period(read_shorthand(text.lower()), current.production_day, answers if days else None)
+    if numbered is not None and getattr(numbered, 'previous_beside', False) and request is not None \
+            and request.get('intent') in ('period_compare', 'period_review', 'period_waste', 'period_speed', 'period_pareto') \
+            and ((request.get('plan') or [{}])[0].get('arguments') or {}).get('window', {}).get('period') == 'fiscal':
+        numbered = None   # "compare P2 to P1": the selected period with the one before beside it, as on main
+    if numbered is not None:
+        # "downtime P1", "top operator reasons P9": a 4-4-5 period said by its number that is not the selected one, on every route
+        # (the coordinator's review of PR #186, round 2, item 3: the hand route and the parser both answered P2); a Standing refusal
+        # raised first ("during the day in P9") keeps its reason
+        request, refused = None, numbered
     if isinstance(text, str) and text.strip() and len(text) <= 2000:
         semantic_request = semantic_parse.route(text, current, store, request, refused)
         if semantic_request is not None:
@@ -2135,12 +2429,13 @@ def parse_request(text, current, store=None):
     return request
 
 
-def _parse_request(text, current):
+def _parse_request(text, current, first_day=None):
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
         raise ValueError("Enter a question of 1-2000 characters")
     lower = correct_typos(text.lower())
     # "May I see how many stops" is a request, never the month of May (issue #153's review)
     lower = re.sub(r"^(\W*(please\s+)?)may(\s+(i|we)\b)", r"\1can\3", lower)
+    lower = month_years(lower, current.production_day, first_day)   # "September 2026" is September; another year's is refused
     read = getattr(current, 'read', None) or {}
     named_day = read['words'] if read.get('words') and read['words'] in lower and read.get('period') == 'day' else None
     asked = lower   # the question as said, before the words that moved the scope are read in it (comparison_gate counts its windows)
@@ -2273,12 +2568,28 @@ DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_en
 CARD_TERMS = ('display_terms', 'ptd_terms', 'ptd_display_terms')
 
 
-def planner_view(result):
-    """A tool result as a planner sees it: a copy without the card's rate-free terms (CARD_TERMS)."""
+def planner_view(result, bounded=False):
+    """A tool result as a planner sees it: a copy without the card's rate-free terms (CARD_TERMS). `bounded` (a planner context over
+    PLANNER_CONTEXT_BYTES) also leaves out each row's record ids, which only the card's receipts read (`source_count` stays), and then
+    the rows past the first PLANNER_ROWS, counted in `rows_left_out`: the planner chooses tools, the card shows every row (the
+    coordinator's review of PR #186, round 2, item 2: a ranking of 200 orders, 75 days or 40 customers stopped at context_limit)."""
     data = result.get('data')
-    if not isinstance(data, dict) or not any(k in data for k in CARD_TERMS):
+    if not isinstance(data, dict):
+        return deepcopy(result)
+    if bounded and isinstance(data.get('rows'), list):
+        rows = [{k: v for k, v in row.items() if k != 'source_ids'} if isinstance(row, dict) else row for row in data['rows']]
+        kept = {k: v for k, v in data.items() if k not in CARD_TERMS and k != 'rows'}
+        if bounded == 'rows' and len(rows) > PLANNER_ROWS:
+            kept['rows_left_out'] = len(rows) - PLANNER_ROWS
+            rows = rows[:PLANNER_ROWS]
+        return deepcopy({**result, 'data': {**kept, 'rows': rows}})
+    if not any(k in data for k in CARD_TERMS):
         return deepcopy(result)
     return deepcopy({**result, 'data': {k: v for k, v in data.items() if k not in CARD_TERMS}})
+
+
+PLANNER_CONTEXT_BYTES = 200000   # what a planner is sent per step at most (a bounded live call, CLAUDE.md); over it, the view is bounded
+PLANNER_ROWS = 50                # ... and, still over it, the rows a planner sees of each result
 
 
 def chart_for(rid, result):
@@ -2540,7 +2851,12 @@ class Agent:
                 'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context) + read_scope_text(context),
                 'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
                 'history': deepcopy(history), 'results': [planner_view(r) for r in store.values()]}
-            if len(json.dumps(planner_context)) > 200000:
+            for bounded in ('ids', 'rows'):
+                # a long ranking ("top 200 orders by rejects this year") is bounded for the planner, never cut on the card (round 2, item 2)
+                if len(json.dumps(planner_context)) <= PLANNER_CONTEXT_BYTES:
+                    break
+                planner_context['results'] = [planner_view(r, bounded) for r in store.values()]
+            if len(json.dumps(planner_context)) > PLANNER_CONTEXT_BYTES:
                 status = 'context_limit'
                 break
             try:

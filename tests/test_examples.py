@@ -39,8 +39,6 @@ def window_dates(name, day):
     d = date.fromisoformat(day)
     monday = d - timedelta(days=d.weekday())
     p_start, p_end, _ = fiscal_bounds(d)
-    if name == 'ytd' and 'ytd' not in semantic.WINDOW_PERIODS:
-        name = 'period'   # the interim until PR #186 adds the year to date
     if name == 'ytd':
         return date(d.year, 1, 1), d
     if name == 'ptd':
@@ -491,8 +489,9 @@ def test_the_reading_score_reads_every_wording_and_is_never_a_gate(store):
 
 
 def _stand_in_model():
-    """The model with its year to date read in a stand-in window, the 4-4-5 period that holds the page day, as it is until PR #186
-    merges: the year to date is given a period the model does not read (a quarter), with the period as its interim."""
+    """The model with its year to date read in a stand-in window, the 4-4-5 period that holds the page day, as it was until PR #186
+    added the year to date: the year to date is given a period the model does not read (a quarter), with the period as its
+    interim."""
     spec = json.loads(semantic.MODEL_PATH.read_text())
     next(w for w in spec['defaults']['relative_windows'] if w['name'] == 'ytd').update(period='quarter', interim='period')
     return semantic.Model(spec)

@@ -1288,7 +1288,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   fetch:async path=>path==='/evals.json'?{ok:true,status:200,json:async()=>({...board,reading})}:{ok:true,status:200,json:async()=>({token:'tok',public:true})},
   window:{innerWidth:1200,location:{search:''},history:{replaceState(){}}},console,URLSearchParams};
  vm.createContext(rctx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),rctx);vm.runInContext(esrc,rctx);await vm.runInContext('ready',rctx);
- assert.equal(eels['reading-summary'].textContent,'Verified examples read correctly: 1 of 4 wordings of 1 examples (the owner’s own words: 0 of 1), asked on 2026-09-14 with the page on shift 2 · 2 asked in a stand-in window, never counted as a pass: the 4-4-5 period stands in for the year to date until the model reads it (PR #186)');
+ assert.equal(eels['reading-summary'].textContent,'Verified examples read correctly: 1 of 4 wordings of 1 examples (the owner’s own words: 0 of 1), asked on 2026-09-14 with the page on shift 2 · 2 asked in a stand-in window, never counted as a pass: a window the model does not read yet is read in its interim');
  assert.equal(eels['reading-detail'].hidden,false);
  assert.equal(eels['reading-rows-title'].textContent,'Wordings read another way (1)');
  assert.deepEqual(eels['reading-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent)),

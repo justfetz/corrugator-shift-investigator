@@ -47,13 +47,19 @@ def test_real_words_and_nonsense_are_left_alone(word):
 
 
 def test_no_golden_question_is_rewritten_by_the_typo_rule():
-    """The typo rule may only ever fix a misspelling: every question the golden set asks reads as it did."""
+    """The typo rule may only ever fix a misspelling: every question the golden set asks reads as it did, but for the window words
+    said short, which the same pass reads as the words they shorten (the semantic model's `windows.shorthand`, PR #186, round 2:
+    "last wk" is last week), and a 4-4-5 period said by its number in words, read as its P-number ("fiscal period 9" is "p9"):
+    those questions read as their words in full, and nothing else of them changes."""
+    from investigator.agent import read_period_numbers, read_shorthand
     cases = json.loads((Path(__file__).resolve().parents[1] / 'evals' / 'golden.json').read_text())['cases']
     questions = {q for c in cases for q in (c.get('turns') or [c.get('question')]) if q}
     typos = {'How much donwtime on 1st shift last week?', 'How much donwtime?', 'Show dowtime by reason this week',
              'How much wast?', 'What was our spead?'}
     assert typos <= questions
-    assert [q for q in questions - typos if correct_typos(q.lower()) != q.lower()] == []
+    assert [q for q in questions - typos if correct_typos(q.lower()) != read_period_numbers(read_shorthand(q.lower()))] == []
+    short = {q for q in questions if read_shorthand(q.lower()) != q.lower()}
+    assert {'downtime last wk', 'downtime in Sept', 'downtime PTD', 'downtime Q-3'} <= short   # the round's own cases, read in full
 
 
 def test_the_real_word_list_is_in_step_with_the_rule():

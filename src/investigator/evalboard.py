@@ -295,8 +295,8 @@ class EvalBoard:
 
     def _reading(self, newest):
         """The verified examples' reading score of the newest tracked run (issue #187): how many of their wordings the offline
-        router read as the example's plan, each wording it missed, and apart, each wording asked in a stand-in window (the year to
-        date until PR #186), never counted as a pass. None when last_run.json is not that run's, or carries none. Reported beside
+        router read as the example's plan, each wording it missed, and apart, each wording asked in a stand-in window (a window the
+        model does not read yet; none since PR #186 added the year to date), never counted as a pass. None when last_run.json is not that run's, or carries none. Reported beside
         the judge, never a gate."""
         path = self.folder / 'last_run.json'
         if not newest or not path.is_file():

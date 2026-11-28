@@ -21,9 +21,9 @@ hold, spelled as they hold it.
 
 The reading score (issue #187's baseline for the planner, #172): each example's question in the owner's words and five
 rewordings, asked of the offline router (`agent.route`: the scope the words name, then `agent.parse_request`) on the golden
-page, and scored a pass when the plan it reads is the example's. A wording asked in a window the model does not read yet (the
-year to date until PR #186) is read in a stand-in window: it is reported apart and never counted as a pass. Reported by
-`evals/run.py`, never a gate.
+page, and scored a pass when the plan it reads is the example's. A wording asked in a window the model does not read yet (a
+relative window with an `interim`; none since PR #186 added the year to date) would be read in a stand-in window: it is
+reported apart and never counted as a pass. Reported by `evals/run.py`, never a gate.
 """
 import json
 from pathlib import Path
@@ -360,7 +360,7 @@ def describe_example(example, mdl=None):
     spec = mdl.defaults['windows'][example['plan']['window']]
     window = spec['label'].lower()
     if spec['period'] not in semantic.WINDOW_PERIODS:
-        window += f' (read as {mdl.defaults["windows"][spec["interim"]]["label"].lower()} until the model reads the {window}: PR #186)'
+        window += f' (read as {mdl.defaults["windows"][spec["interim"]]["label"].lower()} until the model reads the {window})'
     if kind == 'query':
         text = describe(parts[0], mdl, rank=example['plan'].get('rank_by'))
         if example.get('beside'):
@@ -403,7 +403,7 @@ def score_wording(example, text, window, store, day=SCORE_DAY, shift=SCORE_SHIFT
     """One wording read by the offline router on the page (`day`, `shift`, `scope`): {'outcome': 'pass', 'miss' or 'stand-in',
     'read_as'}. `window` is the relative window the wording names, or None for the example's own.
 
-    A wording asked in a window the model does not read yet (the year to date until PR #186) can only be compared with the
+    A wording asked in a window the model does not read yet (a relative window with an `interim`) can only be compared with the
     example's plan read in its stand-in window, which is another question (the stand-in ranks reasons otherwise): it is a
     stand-in, reported apart and never a pass, whatever the router makes of it. A refusal example passes only on its own rule's
     refusal (the absent concept's words), never on another refusal that happens to name what is missing."""

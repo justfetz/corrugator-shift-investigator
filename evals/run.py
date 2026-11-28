@@ -706,6 +706,21 @@ def semantic_failures(question, url):
     return failures
 
 
+def as_read(question, url):
+    """`question` with the words the router reads otherwise read as it reads them (the coordinator's review of PR #186, round 2): each
+    window word said short as the words it shortens (the model's `windows.shorthand`: "last wk" is last week, data the harness reads
+    too; the months said short where a window stands and "mo" after this, last or next, as agent.read_shorthand reads them), and a
+    year beside a month's name consumed when the URL answers that month of that year (`window=YYYY-MM`), never another year's."""
+    from investigator.agent import read_shorthand   # the router's own reading: the months said short and "last mo" too (round 3)
+    text = read_shorthand(question.lower())
+    month = url_window(url or '')[1]
+    if month:
+        names = _MONTHS[3:-1].split('|')
+        text = re.sub(rf'\b({_MONTHS})\s*,?\s+(?:of\s+)?((?:19|20)\d\d)\b',
+                      lambda m: m[1] if f'{m[2]}-{names.index(m[1].lower()) + 1:02d}' == month else m[0], text, flags=re.I)
+    return text
+
+
 def catch_all_failures(question, url):
     """A question naming a countable noun or a unit, or asking "how many" of anything, that resolved to the KPI summary; or a
     quantity asked ("how many", "how much", "how long", a unit) that resolved to the overview or the summary, which answer "why
@@ -713,6 +728,7 @@ def catch_all_failures(question, url):
     for a breakdown, a grouping, a comparison of shifts or a ranked shift; or a quantity measure (one quantity, the stops of each
     production day) answered for the selected shift when the question names none (round 4, items 1, 5, 7 and 8)."""
     failures = []
+    question = as_read(question, url)   # "last wk", "September 2026" (PR #186, round 2)
     if re.search(r'[?&]measure=quantity(&|$)', url or ''):
         grouped = re.search(GROUPED_ASK, question, re.I) or re.search(RANKED_SHIFT, question, re.I)
         if grouped:
@@ -2640,7 +2656,8 @@ def reading_score():
 
 def print_reading(score):
     """The score's line, then every wording it missed with what the offline router read it as, then, apart, every wording asked in
-    a stand-in window (the year to date until PR #186), which is never counted as a pass."""
+    a stand-in window (a window the model does not read yet; none since PR #186 added the year to date), which is never counted
+    as a pass."""
     print(verified.score_line(score))
     for row in score['rows']:
         if row['outcome'] == 'miss':
