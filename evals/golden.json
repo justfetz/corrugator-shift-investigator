@@ -29116,16 +29116,16 @@
    "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A form the reviewer subagent found that 269a28e still read as the whole month, as 161eabb did; main's answer."
   },
   {
-   "id": "top-n-date-how-many-stops-on-splicer-3-in-aug",
+   "id": "top-n-date-stops-on-splicer-1-vs-splicer-2-in-aug",
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner-pending",
-   "question": "how many stops on splicer 3 in Aug",
+   "question": "stops on splicer 1 vs splicer 2 in Aug",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=quantity&window=2026-08&metric=stops&place=splicer-3",
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=2026-08&by=place&vs=Splicer+1,Splicer+2",
     "status": "complete"
    },
-   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's, a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2: a short month beside a day's number is never the whole month. A guard from the reviewer subagent's check of 269a28e: a number that is not a day's (a splicer's: 'stops on splicer 1 vs splicer 2 in Aug', which 269a28e answered as the selected day's shift comparison; a web width, a list of shifts, a ranking's count, a shift before a year) keeps the month 161eabb read, as the question with the month in full does; 269a28e lost it."
   },
   {
    "id": "top-n-date-trim-for-web-width-95-in-aug",
