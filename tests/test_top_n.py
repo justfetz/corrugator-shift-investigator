@@ -296,6 +296,20 @@ def test_the_owners_rules_for_stop_reasons_and_cost(store, question, measure, li
         assert resolve_url(canonical_url(request, asked), store)['request'] == request
 
 
+def test_the_default_ranking_agrees_with_the_defaults_block():
+    """The coordinator's catch-up of PR #186 with main: the model holds the owner's ranking defaults twice, each dimension's
+    `rank_by` (this PR's, what the parser applies) and the `defaults` block's rules (#189's, what the examples and the planner
+    read). The two must say the same: a reason ranked with no measure named ranks by downtime minutes (`reason_ranking`), and a
+    ranking that says no number lists the top N of `top_n`."""
+    mdl = S.model()
+    rules = mdl.defaults['rules']
+    ranked = {name: dim['rank_by'] for name, dim in mdl.dimensions.items() if dim.get('rank_by')}
+    assert ranked, 'no dimension ranks by default'
+    assert all(rank_by['top'] == rules['top_n']['applies']['limit'] for rank_by in ranked.values()), ranked
+    reason = rules['reason_ranking']['applies']
+    assert ranked[reason['dimension']]['measure'] == reason['measure'], (ranked, reason)
+
+
 def test_cost_with_a_measure_said_after_it_is_the_verb(store):
     """"Which reason cost the most minutes": the minutes, the Pareto's own answer (the looks every stop card offers ask it)."""
     request, _ = route('which reason cost the most minutes this week', Context(DAY, 2, scope='day', period='day'), store.production_days, store)

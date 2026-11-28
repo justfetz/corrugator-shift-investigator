@@ -44,16 +44,26 @@ AGGREGATIONS = ('sum', 'count', 'count_distinct', 'ratio', 'priced')
 SIMPLE = ('sum', 'count', 'count_distinct')
 ADDITIVE = ('sum', 'count')  # a share of the total is read only for these
 TIME_GRAINS = ('day', 'week', 'month', 'fiscal')
-# The windows a request reads (the model's `windows` block): the period tools' four, and the year to date, which only the semantic
-# model reads (issue #185: 1 January of the anchor's year through the anchor; the reports' year period is issue #106)
+# The year to date (issue #185): 1 January of the anchor's year through the anchor, which only the semantic model reads (the
+# reports' year period is issue #106).
 YTD = 'ytd'
-WINDOW_PERIODS = (*TIME_GRAINS, YTD)
+# The windows to date of a grain (issue #187): from the first day of the anchor's window of that grain through the anchor, the
+# anchor included. They are the semantic model's alone too, so a report or a period tool never reads one. The period to date is
+# the 4-4-5 period's.
+TO_DATE = {'ptd': 'fiscal'}
+TO_DATE_LABELS = {'ptd': 'Period to date'}
+# The windows a request reads (the model's `windows` block, in this order): the period tools' four, the year to date and the
+# windows to date
+WINDOW_PERIODS = (*TIME_GRAINS, YTD, *TO_DATE)
 PRICE_KINDS = ('trim', 'waste', 'paper', 'downtime', 'speed')
 # The window a priced figure is annualized against, as the tools price theirs: the window's gross area and its
 # scheduled minutes, both measures of the model.
 PRICE_BASIS = ('gross_sqft', 'scheduled_minutes')
-# SQL words a model expression may use outside its {placeholders}: function names, nothing else.
-FUNCTIONS = {'split_part', 'concat_ws'}
+# SQL words a model expression may use outside its {placeholders}: function names, and the cast of a text to a number (a roll's
+# basis weight is the number its paper grade's label names, issue #187), nothing else.
+FUNCTIONS = {'split_part', 'concat_ws', 'regexp_extract', 'cast', 'as', 'double'}
+# The logical column a measure reads for the speed baseline of its row's board grade (the model's `baseline` block, issue #187)
+BASELINE_COLUMN = 'baseline_fpm'
 LEVERS = ('controllable', 'schedule-driven', 'external')   # the owner's levers (issue #101): who can move a figure
 PREVIOUS_WORDS = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before',
                   'fiscal': 'the period before'}
@@ -297,15 +307,24 @@ class Model:
                     self._template(rule['expr'], m['entity'], f'measure {name} above_band')
                     if rule['band'] not in targets.BANDS or targets.BANDS[rule['band']].get(rule['line']) is None:
                         raise ValueError(f'semantic model: measure {name} reads a band line targets.json does not hold')
+                if m.get('each'):
+                    # a sum over each group of records (a paper run on its day), each group's sum held at a floor (issue #187:
+                    # targets.json's speed gap is a run's, and a run over its baseline has none)
+                    each = m['each']
+                    if m['agg'] != 'sum' or not each.get('of') or type(each.get('at_least')) not in (int, float):
+                        raise ValueError(f'semantic model: measure {name} sums over each group of a sum, with the group\'s columns and its floor')
+                    for key in each['of']:
+                        self._template(key, m['entity'], f'measure {name} each')
             elif m['agg'] == 'ratio':
                 for part in (m['numerator'], m['denominator']):
-                    if self.measures.get(part, {}).get('agg') not in SIMPLE:
+                    if self.measures.get(part, {}).get('agg') not in SIMPLE or (part == m['denominator'] and self.measures[part].get('each')):
                         raise ValueError(f'semantic model: ratio {name} needs two simple measures, not {part}')
                 scale = m.get('scale', 1)
                 if type(scale) not in (int, float) or not scale > 0:
                     raise ValueError(f'semantic model: ratio {name} has a scale that is not a positive number')
             else:
-                if self.measures.get(m['quantity'], {}).get('agg') not in SIMPLE or m['price_kind'] not in PRICE_KINDS:
+                if self.measures.get(m['quantity'], {}).get('agg') not in SIMPLE or self.measures[m['quantity']].get('each') \
+                        or m['price_kind'] not in PRICE_KINDS:
                     raise ValueError(f'semantic model: priced {name} needs a simple quantity and a cost_model kind')
             if 'scale' in m and m['agg'] != 'ratio':
                 raise ValueError(f'semantic model: measure {name} has a scale, which only a ratio takes')
@@ -356,8 +375,32 @@ class Model:
         if not all(isinstance(w, str) and w == w.lower().strip() and w for w in future):
             raise ValueError('semantic model: a window after the selected day is lower-case text')
         self.future = list(future)
+        base = self.spec.get('baseline')
+        if base is not None:
+            # the grade speed baseline (issue #187): every part a logical template of its own entity's columns
+            if base.get('entity') not in self.entities or self.entities[base['entity']].get('where'):
+                raise ValueError('semantic model: the baseline reads an entity the model does not hold, or one kept to some of its rows')
+            for key in ('grade', 'feet', 'minutes', 'fallback'):
+                self._template(base[key], base['entity'], f'baseline {key}')
+        self.absent = {}
+        for concept in (self.spec.get('absent') or {}).get('concepts', []):
+            # what the plant asks about that the records do not hold (issue #187): refused naming what is missing
+            if not concept.get('refusal') or not concept.get('needs') or not concept.get('words'):
+                raise ValueError(f'semantic model: the absent concept {concept.get("name")} needs words, what it needs and a refusal')
+            for word in [concept['name'], *concept['words']]:
+                if word.lower() in self.measure_words_of() or word.lower() in self.absent:
+                    raise ValueError(f'semantic model: the absent word {word!r} is already a measure or another absent concept')
+                self.absent[word.lower()] = concept
+            for choice in concept.get('instead', []):
+                if choice not in self.measures:
+                    raise ValueError(f'semantic model: the absent concept {concept["name"]} offers {choice}, which the model does not hold')
         self.levers = {name: self._measure_lever(name, m) for name, m in self.measures.items()}
         self._check_levers()
+        self.defaults = check_defaults(self.spec.get('defaults'), self)
+
+    def measure_words_of(self):
+        """Every word that names a measure (its name, label and synonyms), lower case."""
+        return {w.lower() for name, m in self.measures.items() for w in [name, m['label'], *m.get('synonyms', [])]}
 
     def _measure_lever(self, name, m):
         """A measure's lever (issue #101). A measure with a band, or bands by a dimension, reads it from that band in
@@ -381,7 +424,7 @@ class Model:
         other records makes another quantity (maintenance and planned-maintenance minutes are not the maintenance band's)."""
         m = self.measures[name]
         return (m['entity'], json.dumps(m.get('filter', {}), sort_keys=True), json.dumps(m.get('above_band'), sort_keys=True),
-                m['agg'] == 'count', frozenset(_PLACEHOLDER.findall(m.get('expr') or '')))
+                m['agg'] == 'count', frozenset(_PLACEHOLDER.findall(m.get('expr') or '')), json.dumps(m.get('each'), sort_keys=True))
 
     def _over(self, quantities):
         """The measures over any of these simple quantities: the quantities themselves, the dollars priced from one and
@@ -445,10 +488,18 @@ class Model:
             if re.fullmatch(r'[A-Za-z_]\w*', token) and token not in table_columns and token.lower() not in FUNCTIONS:
                 raise ValueError(f'semantic model: {where} names {token}, which is not a column of its table')
 
+    def baseline_reaches(self, entity):
+        """True when rows of `entity` can read the speed baseline of their board grade: the baseline's own entity (a setup) or
+        one that joins to it many to one (a stop belongs to one setup)."""
+        base = self.spec.get('baseline')
+        return base is not None and (entity == base['entity'] or (entity, base['entity']) in self.joins)
+
     def _template(self, expr, entity, where):
         """Check a logical template: placeholders the entity maps, and nothing but functions, numbers,
         operators and quoted literals outside them."""
         for logical in _PLACEHOLDER.findall(expr):
+            if logical == BASELINE_COLUMN and self.baseline_reaches(entity) and not where.startswith('baseline'):
+                continue
             if logical not in self.entities[entity]['columns']:
                 raise ValueError(f'semantic model: {where} reads {{{logical}}}, which entity {entity} does not map')
         rest = _PLACEHOLDER.sub('0', expr)
@@ -479,6 +530,91 @@ class Model:
         """False when a dimension reads a column the store does not carry yet (a null in the physical block)."""
         owner = self.reach(entity, dimension) or entity
         return all(self.entities[owner]['columns'].get(c) is not None for c in _PLACEHOLDER.findall(self.dimensions[dimension]['expr']))
+
+
+# Who ruled a default (the `defaults` block, issue #187): the owner, the coordinator's default in an issue the owner approved, or
+# a proposal waiting on the owner's word.
+RULERS = ('owner', 'coordinator', 'owner-pending')
+
+
+def check_defaults(spec, mdl):
+    """The model's `defaults` block, checked against the model: {'rules': {id: rule}, 'windows': {name: relative window}}.
+
+    A relative window is named by its distance from the page's day (`step`: 0 the window holding the day, -1 the one before it)
+    in one of the windows the model reads, or in one it does not read yet with an `interim` window it does; the year to date and a
+    window to date only hold the day. A rule says who ruled it and when, and what it `applies` names (a measure, a dimension, beside measures, a
+    limit, a window and its alternates) is checked against the model."""
+    if spec is None:
+        return {'rules': {}, 'windows': {}}
+    windows = {}
+    for w in spec.get('relative_windows', []):
+        name = w.get('name')
+        if not name or name in windows or not w.get('label') or type(w.get('step')) is not int or w['step'] > 0:
+            raise ValueError(f'semantic model: the relative window {name} needs a new name, a label and a step of 0 or less')
+        if (w.get('period') in TO_DATE or w.get('period') == YTD) and w['step'] != 0:
+            raise ValueError(f'semantic model: the relative window {name} is a window to date, which only holds the page\'s day')
+        windows[name] = w
+    for name, w in windows.items():
+        if w.get('period') not in WINDOW_PERIODS:
+            interim = windows.get(w.get('interim'))
+            if interim is None or interim.get('period') not in WINDOW_PERIODS:
+                raise ValueError(f'semantic model: the relative window {name} reads {w.get("period")}, a window the model does not read, '
+                                 'with no interim window it does')
+    rules = {}
+    for rule in spec.get('rules', []):
+        rid = rule.get('id')
+        if not rid or rid in rules or not rule.get('rule'):
+            raise ValueError(f'semantic model: the default {rid} needs a new id and its rule in words')
+        if rule.get('ruled_by') not in RULERS:
+            raise ValueError(f'semantic model: the default {rid} is ruled by one of ' + ', '.join(RULERS))
+        try:
+            date.fromisoformat(str(rule.get('ruled_on')))
+        except ValueError:
+            raise ValueError(f'semantic model: the default {rid} needs the day it was ruled, YYYY-MM-DD') from None
+        applies = rule.get('applies') or {}
+        for key in ('measure',):
+            if key in applies and applies[key] not in mdl.measures:
+                raise ValueError(f'semantic model: the default {rid} names measure {applies[key]}, which the model does not hold')
+        for key in ('beside', 'measures'):
+            for name in applies.get(key, []):
+                if name not in mdl.measures:
+                    raise ValueError(f'semantic model: the default {rid} names measure {name}, which the model does not hold')
+        if 'dimension' in applies and applies['dimension'] not in mdl.dimensions:
+            raise ValueError(f'semantic model: the default {rid} names dimension {applies["dimension"]}, which the model does not hold')
+        if 'limit' in applies and (type(applies['limit']) is not int or not 1 <= applies['limit'] <= MAX_LIMIT):
+            raise ValueError(f'semantic model: the default {rid} lists a limit that is not a whole number from 1 to {MAX_LIMIT}')
+        for name in [applies['window']] if 'window' in applies else []:
+            if name not in windows:
+                raise ValueError(f'semantic model: the default {rid} names window {name}, which is not a relative window of the model')
+        for name in applies.get('alternates', []):
+            if name not in windows:
+                raise ValueError(f'semantic model: the default {rid} names window {name}, which is not a relative window of the model')
+        if 'absent' in applies and applies['absent'] not in {c['name'] for c in mdl.absent.values()}:
+            raise ValueError(f'semantic model: the default {rid} names absent concept {applies["absent"]}, which the model does not list')
+        rules[rid] = rule
+    return {'rules': rules, 'windows': windows}
+
+
+def relative_window(name, day, mdl=None):
+    """(the semantic window a relative window names on the page's `day`, the relative window it was read as): {period, anchor}
+    with the anchor the page's day, or the first day of the window `step` windows before the one holding it. A window the model
+    does not read yet is read as its interim window, and the second item says so (none does today: the year to date was read as
+    the 4-4-5 period until PR #186 added it)."""
+    from .record_store import parse_window as tool_window, previous_window
+    mdl = mdl or model()
+    windows = mdl.defaults['windows']
+    if name not in windows:
+        raise SemanticError(f'No relative window {name!r}; the model names ' + ', '.join(windows), list(windows))
+    spec = windows[name]
+    if spec['period'] not in WINDOW_PERIODS:
+        spec = windows[spec['interim']]
+    day = date.fromisoformat(str(day)[:10])
+    if spec['step'] == 0:
+        return {'period': spec['period'], 'anchor': day.isoformat()}, spec['name']
+    _, _, start, end = tool_window({'period': spec['period'], 'anchor': day.isoformat()})
+    for _ in range(-spec['step']):
+        start, end = previous_window(spec['period'], start, end)
+    return {'period': spec['period'], 'anchor': start.isoformat()}, spec['name']
 
 
 _MODEL = {}
@@ -556,6 +692,10 @@ def resolve_measure(name, mdl=None):
     found = mdl.measure_words.get(name.strip().lower())
     if found:
         return found
+    absent = mdl.absent.get(name.strip().lower().replace('_', ' ')) or mdl.absent.get(name.strip().lower())
+    if absent:
+        # a measure the plant asks for that the records do not hold (issue #187): refused naming what is missing, never the nearest
+        raise SemanticError(absent['refusal'], absent.get('instead', []))
     choices = _choices(name, mdl.measure_words)
     raise SemanticError(f'No measure {name!r} in the semantic model' + (f'; the nearest: {", ".join(choices)}' if choices else '') +
                         '. Every measure is on /docs/semantic-model.', choices)
@@ -566,6 +706,10 @@ def resolve_dimension(name, mdl=None):
     found = mdl.dimension_words.get(str(name).strip().lower()) if isinstance(name, str) else None
     if found:
         return found
+    machine = (mdl.defaults['rules'].get('by_machine') or {}).get('applies') or {}
+    if isinstance(name, str) and name.strip().lower() in [w.lower() for w in machine.get('words', [])]:
+        # the records hold one corrugator (the by_machine default, issue #187): refused for that reason, never as a missing dimension
+        raise SemanticError(f'{machine["says"]} Ask it with no split by machine.')
     choices = _choices(name, mdl.dimension_words)
     raise SemanticError(f'No dimension {name!r} in the semantic model' + (f'; the nearest: {", ".join(choices)}' if choices else '') +
                         '. Every dimension is on /docs/semantic-model.', choices)
@@ -597,26 +741,35 @@ def _denominator_ok(mdl, m, denominator, dimension):
 
 
 def parse_window(spec, first_day=None, last_day=None):
-    """(period, anchor, start, end) of a semantic window: the period tools' four (record_store.parse_window), and the year to
-    date, {"period": "ytd", "anchor": "YYYY-MM-DD"}: 1 January of the anchor's year through the anchor (issue #185). With the
-    store's first and last day, a window wholly outside them is refused with the calendar's reason, as the tools refuse theirs."""
+    """(period, anchor, start, end) of a semantic window: the period tools' four (record_store.parse_window), the year to date,
+    {"period": "ytd", "anchor": "YYYY-MM-DD"}: 1 January of the anchor's year through the anchor (issue #185), and the windows to
+    date (TO_DATE), {"period": "ptd", "anchor": "YYYY-MM-DD"}: the first day of the anchor's 4-4-5 period through the anchor
+    (issue #187). With the store's first and last day, a window wholly outside them is refused with the calendar's reason, as
+    the tools refuse theirs."""
     from .record_store import parse_window as tool_window
-    if isinstance(spec, dict) and spec.get('period') == YTD:
+    if isinstance(spec, dict) and (spec.get('period') == YTD or spec.get('period') in TO_DATE):
         if set(spec) != {'period', 'anchor'} or not isinstance(spec['anchor'], str):
-            raise ValueError('A window is {"period": "day|week|month|fiscal|ytd", "anchor": "YYYY-MM-DD"}')
+            raise ValueError('A window is {"period": "' + '|'.join(WINDOW_PERIODS) + '", "anchor": "YYYY-MM-DD"}')
         try:
             moment = date.fromisoformat(spec['anchor'])
         except ValueError:
             raise ValueError('Window anchor must be a YYYY-MM-DD date') from None
-        start, end = moment.replace(month=1, day=1), moment
+        if spec['period'] == YTD:
+            start, end = moment.replace(month=1, day=1), moment
+            if first_day and last_day and (end < first_day or start > last_day):
+                raise ValueError(f'The year to date {start} to {end} is outside the dataset range {first_day} to {last_day}')
+            return YTD, moment, start, end
+        _, _, start, _ = tool_window({'period': TO_DATE[spec['period']], 'anchor': moment.isoformat()})
+        end = moment
         if first_day and last_day and (end < first_day or start > last_day):
-            raise ValueError(f'The year to date {start} to {end} is outside the dataset range {first_day} to {last_day}')
-        return YTD, moment, start, end
+            raise ValueError(f'The {TO_DATE_LABELS[spec["period"]].lower()} {start} to {end} is outside the dataset range {first_day} to {last_day}')
+        return spec['period'], moment, start, end
     try:
         return tool_window(spec, first_day, last_day)
     except ValueError as exc:
         if str(exc).startswith('Window period must be'):
-            raise ValueError('Window period must be day, week, month, fiscal (4-4-5) or ytd (the year to date)') from None
+            raise ValueError('Window period must be day, week, month, fiscal (4-4-5), ytd (the year to date) '
+                             'or ptd (the 4-4-5 period to date)') from None
         raise
 
 
@@ -630,13 +783,25 @@ def ytd_label(start, end, mdl=None):
     return f"{label}, 1 Jan–{end.day} {end.strftime('%b')} {end.year} ({start.isoformat()} to {end.isoformat()})"
 
 
+def to_date_label(period, start, end):
+    """`Period to date, 4-4-5 P2 (4 weeks), 2026-08-31 to 2026-09-14`: the window's name, the period it is part of, its dates."""
+    from .record_store import fiscal_bounds
+    return f'{TO_DATE_LABELS[period]}, {fiscal_bounds(start)[2]}, {start.isoformat()} to {end.isoformat()}'
+
+
 def window_of(store, spec, mdl=None):
     """The window envelope of a semantic window (the store's `_window`: period, anchor, start, end, label, the production
-    days expected and observed, coverage); the year to date is described by the store's own calendar and labelled here."""
+    days expected and observed, coverage); the year to date and a window to date are described by the store's own calendar and
+    labelled here."""
     if isinstance(spec, dict) and spec.get('period') == YTD:
         _, anchor, start, end = parse_window(spec, store._first, store._last)
         window = store._describe(YTD, start, end, anchor)
         window['label'] = ytd_label(start, end, mdl)
+        return window
+    if isinstance(spec, dict) and spec.get('period') in TO_DATE:
+        period, anchor, start, end = parse_window(spec, store._first, store._last)
+        window = store._describe(period, start, end, anchor)
+        window['label'] = to_date_label(period, start, end)
         return window
     return store._window(spec)
 
@@ -683,8 +848,14 @@ def validate(query, store=None, mdl=None):
         filters[dim] = resolve_value(dim, value, store, mdl) if store is not None else value
         _within_own_filter(mdl, measure, dim, filters[dim], store)
     shift = _shift(shift)
+    if shift is not None:
+        unshifted = [e for e in dict.fromkeys(mdl.measure_entities(measure)) if e and mdl.entities[e]['columns'].get('shift') is None]
+        if unshifted and not mdl.measures[measure].get('denominator_total'):
+            # a roll carries its paper run's day and no shift (issue #187): peel and core are read over all shifts, never as a zero
+            raise SemanticError(f'{mdl.measures[measure]["label"]} ({measure}) is recorded per {mdl.entities[unshifted[0]]["label"].lower()}, '
+                                'which carries no shift: ask it over all shifts')
     if query.window is None:
-        raise SemanticError('A semantic query needs a window: {"period": "day|week|month|fiscal|ytd", "anchor": "YYYY-MM-DD"}')
+        raise SemanticError('A semantic query needs a window: {"period": "' + '|'.join(WINDOW_PERIODS) + '", "anchor": "YYYY-MM-DD"}')
     try:   # a window outside the dataset, or a weekend day, is refused with the calendar's reason
         window_of(store, query.window, mdl) if store is not None else parse_window(query.window)
     except SemanticError:
@@ -698,6 +869,11 @@ def validate(query, store=None, mdl=None):
         # the year to date has no window of the same kind just before it (issue #185): never last year's whole year beside it
         raise SemanticError('compare=prev puts the previous window of the same kind beside a query; the year to date has none: ask it by '
                             'itself, or a month or a 4-4-5 period against the one before it')
+    to_date = query.window['period'] in TO_DATE
+    if compare and to_date:
+        # a window to date has no window of the same kind just before it: never the whole previous period beside part of this one
+        raise SemanticError(f'compare=prev puts the previous window of the same kind beside a query; the {TO_DATE_LABELS[query.window["period"]].lower()} '
+                            'has none: ask it by itself, or a whole 4-4-5 period against the one before it')
     timed = next((d for d in by if mdl.dimensions[d]['type'] == 'time'), None)
     if timed and query.window['period'] == YTD and mdl.dimensions[timed]['grain'] != 'day':   # it holds the anchor's whole day
         # the year to date ends on its anchor, inside its own week, month and 4-4-5 period: a split of it by time would end on a part
@@ -705,6 +881,10 @@ def validate(query, store=None, mdl=None):
         # of the anchor's week)
         raise SemanticError(f'A split of the year to date by {timed} ends on a part of the anchor\'s {timed}, read as a whole one: ask the '
                             'year to date by a dimension that is not time, or a month or a 4-4-5 period by day or week')
+    if timed and to_date and mdl.dimensions[timed]['grain'] != 'day':
+        # it ends on its anchor, inside its own week, month and period: a split by them would end on a part of one, read as a whole
+        raise SemanticError(f'A split of the {TO_DATE_LABELS[query.window["period"]].lower()} by {timed} ends on a part of the anchor\'s {timed}, '
+                            'read as a whole one: ask it by a dimension that is not time, or by day')
     if compare and timed:
         # this week's Monday is not last week's: no row of a time split lines up with the window before, and a missed
         # row would read as a zero
@@ -904,7 +1084,21 @@ def _physical(expr, alias, entity_name, mdl=None):
     return ''.join(out)
 
 
+BASELINE_ALIAS = 'bl'     # the grade baselines a part joins (`_Part._join_baseline`)
+BASELINE_HOLDER = 'bg'    # the baseline entity's row a part of another entity joins to read its grade (a stop's setup)
+
+
+def _baseline_value(mdl, entity_name, alias):
+    """The speed baseline of a row's board grade: the joined baseline, else the grade's fallback (its target) from the row's own
+    setup, `alias` when the row is a setup, the setup the part joined (BASELINE_HOLDER) when it is a stop."""
+    base = mdl.spec['baseline']
+    holder = alias if entity_name == base['entity'] else BASELINE_HOLDER
+    return f"coalesce({BASELINE_ALIAS}.baseline_fpm, {_render(mdl, base['fallback'], base['entity'], holder)})"
+
+
 def _column(mdl, entity_name, logical, alias):
+    if logical == BASELINE_COLUMN and logical not in mdl.entities[entity_name]['columns'] and mdl.baseline_reaches(entity_name):
+        return _baseline_value(mdl, entity_name, alias)
     expr = mdl.entities[entity_name]['columns'][logical]
     if expr is None:
         raise SemanticError(f'The records in this store carry no {logical} yet')
@@ -957,9 +1151,12 @@ class Statement:
 class _Part:
     """One aggregate over one entity: its FROM, joins and WHERE for a window, a shift and the filters that reach it."""
 
-    def __init__(self, mdl, entity_name, dims, filters, shift, measure=None):
+    def __init__(self, mdl, entity_name, dims, filters, shift, measure=None, also=(), bounds=None, through=None):
         self.mdl, self.entity_name, self.entity = mdl, entity_name, mdl.entities[entity_name]
         self.aliases, self.joins = {entity_name: 'b'}, []
+        # the store's first and last day: the trailing year of a grade baseline stays inside the records, as the tools' does;
+        # `through`, the day asked about (the query's own window's last day): the window before it is held at the same baselines
+        self.bounds, self.through, self.baseline = bounds, through, False
         self.dims = [(d, self._dimension(d)) for d in dims]
         self.where = []
         date_col = _column(mdl, entity_name, 'production_date', 'b')
@@ -987,6 +1184,43 @@ class _Part:
             rule = measure['above_band']
             self.where.append(f"{_render(mdl, rule['expr'], entity_name, 'b')} > ?")
             self.filter_params.append(targets.BANDS[rule['band']][rule['line']])
+        if any('{' + BASELINE_COLUMN + '}' in ((m or {}).get('expr') or '') for m in (measure, *also)):
+            self._join_baseline()
+
+    def _join_baseline(self):
+        """Join each board grade's speed baseline (the model's `baseline` block; targets.json, speed): its sustained speed over
+        the trailing year ending on the window's last day, lineal feet over running minutes of the grade's setups with at least
+        record_store.SPEED_MIN_RUN_MINUTES of running time, rounded to 0.1 ft/min half to even, as Python's round in
+        record_store.grade_speed_baselines rounds it.
+        DuckDB computes it in the statement that reads it; its three values are bound when the part binds a window."""
+        mdl, base = self.mdl, self.mdl.spec['baseline']
+        owner = base['entity']
+        holder = 'b'
+        if self.entity_name != owner:
+            holder = BASELINE_HOLDER
+            join = mdl.joins[(self.entity_name, owner)]
+            on = ' AND '.join(f"{_column(mdl, self.entity_name, left, 'b')} = {_column(mdl, owner, right, holder)}" for left, right in join['on'])
+            self.joins.append(f"LEFT JOIN {mdl.entities[owner]['table']} {holder} ON {on}")
+        minutes = _render(mdl, base['minutes'], owner, 'bb')
+        sql = (f"SELECT {_render(mdl, base['grade'], owner, 'bb')} AS grade, round_even(sum({_render(mdl, base['feet'], owner, 'bb')}) / "
+               f"nullif(sum({minutes}), 0), 1) AS baseline_fpm FROM {mdl.entities[owner]['table']} bb "
+               f"WHERE {_column(mdl, owner, 'production_date', 'bb')} BETWEEN ? AND ? AND {minutes} >= ? GROUP BY ALL")
+        self.joins.append(f"LEFT JOIN ({sql}) {BASELINE_ALIAS} ON {BASELINE_ALIAS}.grade = {_render(mdl, base['grade'], owner, holder)}")
+        self.baseline = True
+
+    def baseline_params(self, end):
+        """The baseline join's values: the trailing year's first and last day (record_store.trailing_year: the 365 days ending on the
+        day asked about, the query's own window's last day, else `end`; inside the records) and the shortest running time that counts.
+        The window before a compared one is held at the same baselines, as get_speed_variance holds both sides."""
+        if not self.baseline:
+            return []
+        from .record_store import SPEED_MIN_RUN_MINUTES
+        last = date.fromisoformat(str(self.through or end)[:10])
+        first = last - timedelta(days=364)
+        if self.bounds:
+            last = min(last, self.bounds[1])
+            first = max(last - timedelta(days=364), self.bounds[0])
+        return [first, last, SPEED_MIN_RUN_MINUTES]
 
     def _dimension(self, dim):
         owner = self.mdl.reach(self.entity_name, dim)
@@ -1003,7 +1237,8 @@ class _Part:
         return f"{self.entity['table']} b" + ''.join(f' {j}' for j in self.joins)
 
     def bind(self, start, end):
-        return [start, end] + list(self.filter_params)
+        # the baseline join sits in the FROM, before the WHERE: its values come first
+        return self.baseline_params(end) + [start, end] + list(self.filter_params)
 
     def ids(self):
         if self.entity['id'] is None:
@@ -1031,8 +1266,8 @@ def _aggregate(mdl, name, alias='b', entity_name=None):
 class Compiled:
     """The statements one validated query runs, in order, and how to read their rows."""
 
-    def __init__(self, query, mdl, zero_fill=False):
-        self.query, self.mdl = query, mdl
+    def __init__(self, query, mdl, zero_fill=False, bounds=None):
+        self.query, self.mdl, self.bounds = query, mdl, bounds
         self.measure = mdl.measures[query.measure]
         _, _, start, end = _window_bounds(query.window)
         self.window = (start, end)
@@ -1061,11 +1296,21 @@ class Compiled:
 
     def _simple(self, name, dims, span, grouped):
         m = self.mdl.measures[name]
-        part = _Part(self.mdl, m['entity'], dims, self.query.filters, self.query.shift, m)
+        part = _Part(self.mdl, m['entity'], dims, self.query.filters, self.query.shift, m, bounds=self.bounds, through=self.window[1])
         cols = [f'{sql} AS d{i}' for i, (_, sql) in enumerate(part.dims)]
         share = ', value / nullif(sum(value) OVER (), 0) * 100 AS share_pct' if grouped and m['agg'] in ADDITIVE else ''
-        inner = (f"SELECT {', '.join(cols + [f'{_aggregate(self.mdl, name)} AS value', 'count(*) AS source_count', f'{part.ids()} AS source_ids'])} "
-                 f"FROM {part.source()} WHERE {' AND '.join(part.where)}" + (' GROUP BY ALL' if cols else ''))
+        if m.get('each'):
+            # each group of records (a paper run on its day) summed inside the row's slice, held at its floor, then the groups
+            # summed: DuckDB computes both levels; the records behind a row are its groups' records
+            keys = [f"{_render(self.mdl, key, m['entity'], 'b')} AS k{j}" for j, key in enumerate(m['each']['of'])]
+            groups = (f"SELECT {', '.join(cols + keys + [f'sum({_render(self.mdl, m['expr'], m['entity'], 'b')}) AS v', 'count(*) AS n', f'{part.ids()} AS ids'])} "
+                      f"FROM {part.source()} WHERE {' AND '.join(part.where)} GROUP BY ALL")
+            outer = [f'd{i}' for i in range(len(cols))]
+            inner = (f"SELECT {', '.join(outer + [f'coalesce(sum(greatest(v, {float(m['each']['at_least'])!r})), 0) AS value', 'coalesce(sum(n), 0) AS source_count', f'list_sort(list_distinct(flatten(list(ids))))[1:{SOURCE_ID_CAP}] AS source_ids'])} "
+                     f"FROM ({groups}) g" + (' GROUP BY ALL' if outer else ''))
+        else:
+            inner = (f"SELECT {', '.join(cols + [f'{_aggregate(self.mdl, name)} AS value', 'count(*) AS source_count', f'{part.ids()} AS source_ids'])} "
+                     f"FROM {part.source()} WHERE {' AND '.join(part.where)}" + (' GROUP BY ALL' if cols else ''))
         params = part.bind(*span)
         if grouped and self.zero_fill:
             # a fewest ranking counts the values with no records as recorded zeros (the review of PR #155: a place with no stop
@@ -1118,13 +1363,14 @@ class Compiled:
         q, m, mdl = self.query, self.measure, self.mdl
         num, den = mdl.measures[m['numerator']], mdl.measures[m['denominator']]
         scale = m.get('scale', 1)
-        n_part = _Part(mdl, num['entity'], dims, q.filters, q.shift, num)
+        # one FROM reads both parts when they share an entity: a baseline in either joins it
+        n_part = _Part(mdl, num['entity'], dims, q.filters, q.shift, num, also=(den,) if num['entity'] == den['entity'] else (), bounds=self.bounds, through=self.window[1])
         keys = [f'd{i}' for i in range(len(dims))]
         n_cols = [f'{sql} AS d{i}' for i, (_, sql) in enumerate(n_part.dims)]
         group = ' GROUP BY ALL' if n_cols else ''
         numerator, denominator = _aggregate(mdl, m['numerator']), _aggregate(mdl, m['denominator'])
         where = ' AND '.join(n_part.where)
-        restricted = any(part.get(k) for part in (num, den) for k in ('filter', 'above_band'))
+        restricted = any(part.get(k) for part in (num, den) for k in ('filter', 'above_band', 'each'))
         if num['entity'] == den['entity'] and not restricted:
             select = ', '.join(n_cols + [f'{numerator} AS numerator', f'{denominator} AS denominator',
                                          'count(*) AS source_count', f'{n_part.ids()} AS source_ids'])
@@ -1132,10 +1378,15 @@ class Compiled:
                    f'SELECT {select} FROM {n_part.source()} WHERE {where}{group}) t')
             return sql, n_part.bind(*span)
         shared = [d for d in dims if mdl.reach(den['entity'], d) is not None]
-        d_part = _Part(mdl, den['entity'], shared, q.filters, q.shift, den)
+        d_part = _Part(mdl, den['entity'], shared, q.filters, q.shift, den, bounds=self.bounds, through=self.window[1])
         d_cols = [f'{sql} AS d{dims.index(d)}' for d, sql in d_part.dims]
         n_select = ', '.join(n_cols + [f'{numerator} AS numerator', 'count(*) AS source_count', f'{n_part.ids()} AS source_ids'])
         n_sql = f'SELECT {n_select} FROM {n_part.source()} WHERE {where}{group}'
+        n_params = n_part.bind(*span)
+        if num.get('each'):
+            # a numerator summed over each group (the per-run speed gap): its rows as _simple reads them, named as a numerator
+            inner, _, n_params = self._simple(m['numerator'], dims, span, grouped=False)
+            n_sql = f"SELECT {', '.join(keys + ['value AS numerator', 'source_count', 'source_ids'])} FROM ({inner}) ne"
         d_select = ', '.join(d_cols + [f'{denominator} AS denominator'])
         d_sql = f"SELECT {d_select} FROM {d_part.source()} WHERE {' AND '.join(d_part.where)}" + (' GROUP BY ALL' if d_cols else '')
         # a slice whose dimension is not recorded (NULL on both sides) is one slice, as the compare join reads it, never a lost one
@@ -1148,12 +1399,12 @@ class Compiled:
                    f"{fill} / nullif(d.denominator, 0) * {scale} AS value, coalesce(n.source_count, 0) AS source_count, "
                    f"coalesce(n.source_ids, CAST([] AS VARCHAR[])) AS source_ids, count(*) OVER () AS groups "
                    f"FROM ({d_sql}) d LEFT JOIN ({n_sql}) n ON {' AND '.join(on)}")
-            return sql, d_part.bind(*span) + n_part.bind(*span)
+            return sql, d_part.bind(*span) + n_params
         join = f"LEFT JOIN ({d_sql}) d ON {' AND '.join(on)}" if on else f'CROSS JOIN ({d_sql}) d'
         sql = (f"SELECT {', '.join([f'n.{k} AS {k}' for k in keys] + ['n.numerator', 'd.denominator'])}, "
                f"n.numerator / nullif(d.denominator, 0) * {scale} AS value, n.source_count, n.source_ids, count(*) OVER () AS groups "
                f"FROM ({n_sql}) n {join}")
-        return sql, n_part.bind(*span) + d_part.bind(*span)
+        return sql, n_params + d_part.bind(*span)
 
     def _order(self, keys):
         order = self.query.order
@@ -1218,11 +1469,11 @@ def _fills_zeros(mdl, query):
     return not any(spec['entity'] in (m['entity'], '*') and spec['expr'] == '{' + column + '}' for column in (m.get('filter') or {}))
 
 
-def compile_query(query, mdl=None, zero_fill=False):
+def compile_query(query, mdl=None, zero_fill=False, bounds=None):
     """The statements a validated query runs (`validate` first: compile trusts its names); `zero_fill` lets a fewest ranking
     list the values with no records (`run` passes it for a dimension whose values the store can list)."""
     mdl = mdl or model()
-    return Compiled(query, mdl, zero_fill)
+    return Compiled(query, mdl, zero_fill, bounds)
 
 
 # ------------------------------------------------------------------ running
@@ -1303,7 +1554,7 @@ def run(query, store, rates=None, mdl=None):
     started = time.perf_counter()
     query = validate(query, store, mdl)
     fill = bool(query.group_by) and (mdl.dimensions[query.group_by[0]]['type'] == 'time' or store_values(query.group_by[0], store, mdl) is not None)
-    compiled = compile_query(query, mdl, zero_fill=fill)
+    compiled = compile_query(query, mdl, zero_fill=fill, bounds=(store._first, store._last))
     m = compiled.measure
     window = window_of(store, query.window, mdl)
     previous = store._previous(window) if query.compare else None
@@ -1522,6 +1773,56 @@ def _cell(text):
     return str(text).replace('|', '\\|').replace('\n', ' ')
 
 
+def _defaults_markdown(spec, measures):
+    """The defaults block, the grade baseline, what the records do not hold, and the verified examples (issue #187)."""
+    out = []
+    defaults = spec.get('defaults')
+    if defaults:
+        out += ['', '## Defaults', '', defaults['about'], '',
+                '| Default | Rule | Applies | Ruled by | Ruled on | Source |', '| --- | --- | --- | --- | --- | --- |']
+        for rule in defaults['rules']:
+            applies = '; '.join(f'{k}: {", ".join(v) if isinstance(v, list) else v}' for k, v in (rule.get('applies') or {}).items())
+            rule_text = rule['rule'] + (f' {rule["scope"]}' if rule.get('scope') else '')
+            out.append(f'| `{rule["id"]}` | {_cell(rule_text)} | {_cell(applies) or "the rule in words"} | {rule["ruled_by"]} | {rule["ruled_on"]} | '
+                       f'{_cell(rule.get("source", ""))} |')
+        out += ['', '### Relative windows', '',
+                'The windows a question or an example names by their distance from the page\'s day. The year to date and the period to '
+                'date end on the page\'s day; neither is compared with the window before it, and each is split by day only.', '',
+                '| Name | Label | Window | Definition |', '| --- | --- | --- | --- |']
+        for w in defaults['relative_windows']:
+            step = 'holding the page day' if w['step'] == 0 else f'{-w["step"]} before the one holding the page day'
+            reads = f'`{w["period"]}`, {step}' + (f'; read as `{w["interim"]}` until the model reads `{w["period"]}`' if w.get('interim') else '')
+            out.append(f'| `{w["name"]}` | {_cell(w["label"])} | {_cell(reads)} | {_cell(w["description"])} |')
+    if spec.get('baseline'):
+        out += ['', '## The grade baseline', '', spec['baseline']['about'], '',
+                'The measures that read it: ' + ', '.join(f'`{m["name"]}`' for m in spec['measures'] if '{' + BASELINE_COLUMN + '}' in (m.get('expr') or ''))
+                + '; and the ratios over them (' + ', '.join(f'`{m["name"]}`' for m in spec['measures'] if m['agg'] == 'ratio' and
+                                                             '{' + BASELINE_COLUMN + '}' in (measures[m['numerator']].get('expr') or '')) + ').']
+    absent = (spec.get('absent') or {}).get('concepts', [])
+    if absent:
+        out += ['', '## What the records do not hold', '', spec['absent']['about'], '',
+                '| Concept | Said as | Needs | Refusal |', '| --- | --- | --- | --- |']
+        for c in absent:
+            out.append(f'| `{c["name"]}` | {_cell(", ".join(c["words"]))} | {_cell(c["needs"])} | {_cell(c["refusal"])} |')
+    from . import examples
+    mdl = Model(spec)
+    try:
+        listed = examples.load(mdl=mdl)   # an example the model cannot hold fails the docs build, as it fails the tests
+    except FileNotFoundError:
+        listed = None
+    if listed is not None:
+        out += ['', '## Verified examples', '', examples.about(), '',
+                'The reading is the plan in words; its window is the relative window it names, read on the page\'s day. Each example\'s '
+                'rows are checked against hand-written SQL (`tests/test_examples.py`), and its wordings are scored on `/evals`.', '',
+                '| Lever | Question | Definition | The reading | Alternates | Status |', '| --- | --- | --- | --- | --- | --- |']
+        for e in listed:
+            alternates = ', '.join(mdl.defaults['windows'][w]['label'].lower() for w in e.get('alternates', [])) or 'none'
+            note = f' {e["notes"]}' if e.get('notes') else ''
+            out.append(f'| {e["lever"]} | {_cell(e["question"])} (`{e["id"]}`) | {_cell(e["definition"])} | {_cell(examples.describe_example(e, mdl) + "." + note)} | '
+                       f'{_cell(alternates)} | {e["reviewed_by"]} |')
+    return out
+
+
 def model_markdown(text=None):
     """`/docs/semantic-model`, rendered from the model file's text (docsite builds it at image build): every
     measure with its definition, unit, aggregation and band; every dimension; the synonyms; the entities, joins
@@ -1563,6 +1864,8 @@ def model_markdown(text=None):
                 rule = m['above_band']
                 conditions.append(f'`{rule["expr"]}` over the {rule["band"]} {rule["line"]} ({targets.BANDS[rule["band"]][rule["line"]]:g}%)')
             agg += ''.join(f' where {c}' for c in conditions[:1]) + ''.join(f' and {c}' for c in conditions[1:])
+            if m.get('each'):
+                agg += f', summed for each {" and ".join(f"`{k}`" for k in m["each"]["of"])} and each held at {m["each"]["at_least"]:g} or more'
         band = _band_words(m['band']) if m.get('band') else ''
         if m.get('band_by'):
             band = '; '.join(f'{value}: {_band_words(b)}' for value, b in m['band_by']['bands'].items())
@@ -1610,6 +1913,7 @@ def model_markdown(text=None):
     if windows.get('future'):
         out += ['', '### After the selected day', '', windows['future']['about'], '',
                 'Refused: ' + _cell(', '.join(f'"{w}"' for w in windows['future']['words'])) + '.']
+    out += _defaults_markdown(spec, measures)
     out += ['', '## Synonyms', '',
             'The plant\'s own words for a measure, a dimension or a dimension\'s value. The offline router reads a question with '
             'these (issue #144, `semantic_parse.py`): a question in the model\'s words, or in these, answers with the measure, '
@@ -1673,5 +1977,6 @@ def model_markdown(text=None):
         if entity.get('where'):
             out.append(f'| {name} | `{entity["table"]}` | (rows kept) | `{_cell(entity["where"])}` |')
         for logical, column in entity['columns'].items():
-            out.append(f'| {name} | `{entity["table"]}` | `{logical}` | ' + (f'`{_cell(column)}`' if column is not None else 'not carried yet') + ' |')
+            # a null is a column the record does not carry: a roll belongs to its paper run's day, which several shifts ran
+            out.append(f'| {name} | `{entity["table"]}` | `{logical}` | ' + (f'`{_cell(column)}`' if column is not None else 'not on this record') + ' |')
     return '\n'.join(out) + '\n'

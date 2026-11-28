@@ -233,4 +233,4 @@ The taxonomy table (`reject_reasons`) is `reject_reasons.json`, one row per reas
 - **A third lane**: the contract allows it; the demo machine's two cutoff knives mean the scheduler never pairs three.
 - **Downstream bookkeeping** reasons of the planning / admin category (marked above), which no dry-end record carries.
 - **An orders ledger** beyond each lane's `order_quantity`: the daily order matrix still shows requested and remaining sheets as null.
-- Holidays, timezone / DST, overlapping or shift-crossing stops, reject replacement, paper basis weights and recipes, and any vendor's field semantics beyond the definitions here.
+- Holidays, timezone / DST, overlapping or shift-crossing stops, reject replacement, paper basis weights and recipes as records of their own (a roll's `paper_grade` names its paper and basis weight, `26 lb liner`, from its board grade's recipe), and any vendor's field semantics beyond the definitions here.

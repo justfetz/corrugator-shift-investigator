@@ -51,6 +51,7 @@ from .agent import Agent, Context, TOOL_SCHEMAS, parse_request, question_scope, 
 from .anthropic_provider import resolve_model
 from .cost_model import client_config, effective as effective_rates, parse_rates
 from . import datapages
+from . import examples
 from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
 from .questionlog import LINES_PER_MIN, QuestionLog, check_comment, ids as log_ids, scope_of, valid_id
@@ -198,6 +199,8 @@ class Workbench:
         self.reports = OrderedDict()
         # The rolling year of synthetic production, built once per process; the eval harness passes the golden window's store.
         self.store = store if store is not None else default_store()
+        # The verified examples (issue #187), checked with the store: a filter value the records do not hold fails at boot.
+        examples.load(store=self.store)
         # Where `/` lands (issue #137): an explicit address, so the URL is the state from the first response.
         self.landing = landing(self.store)
         self.landing_url = scope_url(self.landing[0], 'day', 'shift', self.landing[1], self.store.machine_id)

@@ -1973,7 +1973,8 @@ GROUP_NOUNS = {'grade': 'board grade', 'wet_end': 'paper run', 'web_width': 'web
                'reject_reason': 'reject reason', 'period': 'accounting period', 'day': 'production day', 'week': 'production week',
                'month': 'calendar month', 'kind': 'stop kind', 'place': 'stop place', 'reason': 'stop reason'}
 SEMANTIC_LOOKS = {'stop': ('pareto', 'stops'), 'reject': ('waste', 'grade'), 'lane': ('overrun', 'grade'),
-                  'shift': ('waste', 'stops'), 'setup': ('grade', 'speed'), 'setup waste': ('waste', 'grade')}
+                  'shift': ('waste', 'stops'), 'setup': ('grade', 'speed'), 'setup waste': ('waste', 'grade'),
+                  'roll': ('rollstock', 'waste')}   # peel, core and the paper consumed (issue #187): the paper runs' rollstock
 YTD_LOOKS = ('pareto', 'grade', 'stops')   # the looks a year-to-date card offers: the ones the semantic model reads over it
 
 
@@ -2299,5 +2300,6 @@ class SemanticAnswer:
                      'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}'),
                      'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}'),
                      'speed': ('Each grade against its speed target', f'Which grade is slowest against target{wp}{sfx}?'),
-                     'overrun': ('Actual against nominal cuts, by knife', f'Over/under-run by knife{wp}{sfx}')}
+                     'overrun': ('Actual against nominal cuts, by knife', f'Over/under-run by knife{wp}{sfx}'),
+                     'rollstock': ('The paper each grade and width consumed', f'How much paper did we consume{wp}{sfx}?')}
         return [look(*questions[kind]) for kind in kinds]

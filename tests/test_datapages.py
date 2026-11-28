@@ -682,20 +682,38 @@ class Figures:
         raise Unchecked(f'speed variance bucket {bucket}')
 
     # ---- the semantic model: its measure over the receipt's records, by the model's own expression
-    @staticmethod
-    def semantic_value(name, rows):
+    def semantic_value(self, name, rows, through=None):
         """A count, a distinct count or a sum of a measure's expression over rows of its entity's table: each
-        {placeholder} read through the model's physical block, the arithmetic evaluated over the row (no SQL)."""
+        {placeholder} read through the model's physical block, the arithmetic evaluated over the row (no SQL). Issue #187's
+        parts are read the same way: a row's grade baseline is the tools' (record_store.grade_speed_baselines over the trailing
+        year ending on `through`, the window's last day; the grade's target without one), a roll's basis weight the number its
+        paper grade's name gives ('26 lb liner'), and a sum over each group (a paper run on its day and shift) sums each group's
+        rows, holds it at its floor and sums the groups."""
         from investigator import semantic
         mdl = semantic.model()
         m = mdl.measures[name]
         if m['agg'] == 'count':
             return len(rows)
-        columns = mdl.entities[m['entity']]['columns']
+        columns = dict(mdl.entities[m['entity']]['columns'])
+        if '{baseline_fpm}' in m['expr']:
+            if through is None or m['entity'] != 'setup':
+                raise Unchecked(f'semantic measure {name}: a baseline with no window, or of a {m["entity"]}')
+            grades = self.store.grade_speed_baselines(through)['grades']
+            rows = [{**r, 'baseline_of_grade': grades[r['quality_id']]['baseline_fpm'] if r['quality_id'] in grades else r['target']} for r in rows]
+            columns['baseline_fpm'] = 'baseline_of_grade'
+        if 'basis_lb' in columns and '{basis_lb}' in m['expr']:
+            rows = [{**r, 'basis_of_paper': float(re.match(r'(\d+(?:\.\d+)?) lb ', r['paper_grade']).group(1))} for r in rows]
+            columns['basis_lb'] = 'basis_of_paper'
         code = re.sub(r'\{(\w+)\}', lambda x: f'({columns[x.group(1)]})', m['expr'])
         if not re.fullmatch(r'[\w\s()+\-*/.]+', code):
             raise Unchecked(f'semantic measure {name}: {code}')
         values = [eval(code, {'__builtins__': {}}, {k: (0 if v is None else v) for k, v in r.items()}) for r in rows]
+        if m.get('each'):
+            keys = [columns[re.fullmatch(r'\{(\w+)\}', k).group(1)] for k in m['each']['of']]
+            groups = {}
+            for r, v in zip(rows, values):
+                groups[tuple(r[k] for k in keys)] = groups.get(tuple(r[k] for k in keys), 0) + v
+            return sum(max(v, m['each']['at_least']) for v in groups.values())
         return len(set(values)) if m['agg'] == 'count_distinct' else sum(values)
 
     def semantic(self, entry, part, index, rows):
@@ -704,18 +722,19 @@ class Figures:
         from investigator import semantic
         data = entry['data']
         m = semantic.model().measures[data['measure']]
+        through = (data.get('window') or {}).get('end')   # the day asked about: a grade baseline's trailing year ends on it
         if m['agg'] in ('count', 'count_distinct'):
-            return self.semantic_value(data['measure'], rows), True
+            return self.semantic_value(data['measure'], rows, through), True
         if m['agg'] == 'sum':
-            return self.semantic_value(data['measure'], rows), False
+            return self.semantic_value(data['measure'], rows, through), False
         if m['agg'] == 'priced':
-            return cost_model.price(m['price_kind'], self.semantic_value(m['quantity'], rows), self.rates)['usd'], False
+            return cost_model.price(m['price_kind'], self.semantic_value(m['quantity'], rows, through), self.rates)['usd'], False
         if m['agg'] == 'ratio':
             declared = entry['source'].get('denominator') or {}
             url = declared.get('url') if part is None else (declared.get('rows') or [None] * (index + 1))[index]
             if not url:
                 raise WrongRows('a ratio with no denominator declared')
-            numerator, denominator = self.semantic_value(m['numerator'], rows), self.semantic_value(m['denominator'], self.rows(url))
+            numerator, denominator = self.semantic_value(m['numerator'], rows, through), self.semantic_value(m['denominator'], self.rows(url), through)
             return numerator / denominator * m.get('scale', 1) if denominator else None, False
         raise Unchecked(f'semantic agg {m["agg"]}')
 

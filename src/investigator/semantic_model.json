@@ -23,6 +23,10 @@
     "line_id": "concat_ws('|', setup_id, lane)", "setup_id": "setup_id", "production_date": "production_date", "shift": "shift", "lane": "lane",
     "order_number": "order_number", "customer_id": "customer_id", "outs": "outs", "nominal_cuts": "nominal_cuts",
     "actual_cuts": "actual_cuts"}},
+   "roll": {"table": "rolls", "id": "roll_id", "columns": {
+    "roll_id": "roll_id", "production_date": "production_date", "shift": null, "wet_end_id": "wet_end_id", "stand": "stand",
+    "paper_grade": "paper_grade", "basis_lb": "cast(regexp_extract(paper_grade, '^([0-9.]+) lb ', 1) as double)",
+    "fed_sqft": "lineal_ft * width_in / 12", "peel_sqft": "peel_sqft", "core_sqft": "core_sqft"}},
    "shift": {"table": "shifts", "id": "shift_id", "columns": {
     "shift_id": "concat_ws('/', production_date, shift)", "production_date": "production_date", "shift": "shift", "crew": "crew",
     "scheduled_minutes": "scheduled_minutes", "bale_sqft": "bale_sqft", "trim_sqft": "trim_sqft", "shear_sqft": "shear_sqft",
@@ -35,8 +39,13 @@
   {"name": "stop", "label": "Stop", "description": "One row of the downtime log, held by the run setup it fell in.", "key": "stop_id"},
   {"name": "reject", "label": "Reject line", "description": "One lane's rejected board on a setup, by reject family and reason.", "key": "setup_id, lane, family, reason", "band": "dry_end"},
   {"name": "lane", "label": "Order lane", "description": "One order's slice of the web on a setup: lane N, its outs and cuts.", "key": "setup_id, lane"},
-  {"name": "shift", "label": "Shift", "description": "One 480-minute shift of a production day, with its crew and the bale's scale reading.", "key": "production_date, shift"}
+  {"name": "shift", "label": "Shift", "description": "One 480-minute shift of a production day, with its crew and the bale's scale reading.", "key": "production_date, shift"},
+  {"name": "roll", "label": "Roll", "description": "One roll of paper a paper run mounted on a roll stand: the paper fed from it, the peel stripped at roll prep and the core left when it was spliced out. A roll carries its paper run's production day and no shift. Its paper grade names its basis weight in lb per MSF ('26 lb liner'), so the semantic model reads peel and core by weight.", "key": "roll_id"}
  ],
+ "baseline": {
+  "about": "Each board grade's speed baseline (targets.json, speed; issue #101), read by a measure as {baseline_fpm}: the grade's sustained speed over the trailing year ending on the window's last day (the 365 days ending on it, inside the records), lineal feet over running minutes of every setup of the grade with at least record_store.SPEED_MIN_RUN_MINUTES of running time, a ratio of sums rounded to 0.1 ft/min as record_store.grade_speed_baselines rounds it. A grade with no sustained run in the trailing year reads its target. DuckDB computes it in the statement that reads it (issue #187); a stop reads the baseline of the setup it fell in.",
+  "entity": "setup", "grade": "{quality_id}", "feet": "{lineal_ft}", "minutes": "({elapsed_seconds} - {stop_seconds}) / 60", "fallback": "{target_fpm}"
+ },
  "joins": [
   {"from": "stop", "to": "setup", "on": [["setup_id", "setup_id"]], "relationship": "many_to_one"},
   {"from": "reject", "to": "setup", "on": [["setup_id", "setup_id"]], "relationship": "many_to_one"},
@@ -48,14 +57,15 @@
   {"from": "lane", "to": "shift", "on": [["production_date", "production_date"], ["shift", "shift"]], "relationship": "many_to_one"}
  ],
  "windows": {
-  "about": "The windows a request reads, {period, anchor}: the period names the window and the anchor is a day inside it. The production day, the Mon-Fri week, the calendar month and the 4-4-5 period are the period tools' own windows (record_store.parse_window); the year to date is the semantic model's alone, so a report or a period tool never reads it (their year period is issue #106).",
+  "about": "The windows a request reads, {period, anchor}: the period names the window and the anchor is a day inside it. The production day, the Mon-Fri week, the calendar month and the 4-4-5 period are the period tools' own windows (record_store.parse_window); the year to date and the period to date are the semantic model's alone, so a report or a period tool never reads either (their year period is issue #106). Each ends on its anchor.",
   "periods": [
    {"name": "day", "label": "Production day", "description": "One production day, Monday to Friday, starting 07:00.", "examples": ["the selected day", "yesterday"]},
    {"name": "week", "label": "Production week", "description": "The Monday-to-Friday week that holds the anchor.", "examples": ["this week", "last week"]},
    {"name": "month", "label": "Calendar month", "description": "The calendar month that holds the anchor.", "examples": ["this month", "last month", "in August"]},
    {"name": "fiscal", "label": "4-4-5 period", "description": "The 4-4-5 accounting period that holds the anchor.", "examples": ["this period", "last period", "P9"]},
    {"name": "ytd", "label": "Year to date", "description": "1 January of the anchor's year through the anchor, the anchor included (issue #185). It has no window of the same kind before it, so it is never compared with the previous window.",
-    "words": ["ytd", "y-t-d", "year to date", "this year to date", "the year to date", "this year", "so far this year", "this year so far", "the year so far"]}
+    "words": ["ytd", "y-t-d", "year to date", "this year to date", "the year to date", "this year", "so far this year", "this year so far", "the year so far"]},
+   {"name": "ptd", "label": "Period to date", "description": "The first day of the 4-4-5 period that holds the anchor, through the anchor (issue #187). It has no window of the same kind before it, so it is never compared with the previous window, and it is split by day only."}
   ],
   "shorthand": {
    "about": "Window words said short, read as the words they shorten before any window is read, by the hand router and the parser alike (the coordinator's review of PR #186, round 2, item 5): 'last wk' is last week, 'in Sept' and 'Sep 2026' are September, 'PTD' the period to date and 'Q-3' or '3Q' the third quarter, which are windows the model does not read and are refused. The months said short ('months', 'Sep' and 'Sept' among them) are read only where a window stands, right after a word that leads one ('in Aug', 'for Sept', 'during Jul', 'versus Jul') or before a year ('Dec 2025'), and never beside a day's number: 'the dec in speed' and 'the current apr' are not months, and '7 Sep', 'Sep 10' or 'the week of 7 Aug' is a named date, never the whole month (the coordinator's review of PR #186 at 9d12f76, item 2). 'Mo' ('relative') is a month only after this, last or next ('last mo'): 'downtime on mo' is not one.",
@@ -71,6 +81,59 @@
              "coming week", "coming weeks", "coming month", "coming months", "coming period", "upcoming week", "upcoming weeks", "upcoming month",
              "upcoming months", "upcoming period", "week after next", "month after next", "day after next"]
   }
+ },
+ "absent": {
+  "about": "What the plant asks about that these records do not hold (issue #187). A request that names one is refused with what is missing and what the records hold instead, never answered with a nearby measure. A field a real plant's records would need is named in the refusal; the synthetic records never invent it.",
+  "concepts": [
+   {"name": "customer_credits", "label": "Customer credits", "words": ["customer credits", "customer credit", "credits", "credit", "customer claims", "claims"], "needs": "shipments",
+    "instead": ["reject_sqft"],
+    "refusal": "The records hold no shipments, so no customer credit: credits for bond or warp join the dry-end reject family once shipment records exist (issue #187). Until then the dry-end rejects by reason are what the records hold (reject_sqft by reject_reason)."}
+  ]
+ },
+ "defaults": {
+  "about": "The plant's defaults, as rules (issue #187): what a question means when it leaves something unsaid. Each rule says who ruled it and when (`ruled_by`: owner, coordinator for the coordinator's default in an issue the owner approved, or owner-pending until the owner rules; `ruled_on`), and `applies` holds what a planner applies, checked against the model when it loads. The verified examples (examples.json) are built from these rules, and the read-back planner (issue #172) reads both. The offline parser reads none of them yet: the app's own no-window behaviour is the owner's open call in issue #187, so the page keeps its window.",
+  "relative_windows": [
+   {"name": "ytd", "label": "Year to date", "period": "ytd", "step": 0,
+    "description": "The year to date that holds the page day: the window `ytd` of the windows block."},
+   {"name": "ptd", "label": "Period to date", "period": "ptd", "step": 0,
+    "description": "The period to date that holds the page day: the window `ptd` of the windows block."},
+   {"name": "period", "label": "This 4-4-5 period", "period": "fiscal", "step": 0,
+    "description": "The whole 4-4-5 period that holds the page day."},
+   {"name": "previous_period", "label": "The previous 4-4-5 period", "period": "fiscal", "step": -1,
+    "description": "The 4-4-5 period before the one that holds the page day."},
+   {"name": "this_week", "label": "This week", "period": "week", "step": 0,
+    "description": "The Monday-to-Friday week that holds the page day."},
+   {"name": "last_week", "label": "Last week", "period": "week", "step": -1,
+    "description": "The Monday-to-Friday week before the one that holds the page day."},
+   {"name": "this_month", "label": "This month", "period": "month", "step": 0,
+    "description": "The calendar month that holds the page day."}
+  ],
+  "rules": [
+   {"id": "no_window", "rule": "A question that names no window reads the year to date; the period to date, last week and the previous period come alongside as alternates.",
+    "applies": {"window": "ytd", "alternates": ["ptd", "last_week", "previous_period"]},
+    "scope": "The verified examples and the planner (issue #172). The app's own no-window behaviour is unchanged: which wins on a page that names a day, the page's window or the year to date, is the owner's open call in issue #187.",
+    "ruled_by": "owner", "ruled_on": "2026-11-17", "source": "issue #187, the SLT question set"},
+   {"id": "top_n", "rule": "A ranking that says no number lists the top 5.",
+    "applies": {"limit": 5}, "ruled_by": "owner", "ruled_on": "2026-11-15", "source": "issue #172"},
+   {"id": "reason_ranking", "rule": "Stop reasons ranked with no measure named rank by downtime minutes, each with its share of the total, its stops and its minutes per stop beside.",
+    "applies": {"dimension": "reason", "measure": "downtime_minutes", "share": true, "beside": ["stops", "minutes_per_stop"]},
+    "ruled_by": "owner", "ruled_on": "2026-11-17", "source": "issue #172 (15 Nov: rank by minutes), the SLT question set in issue #187 (17 Nov: stops and minutes per stop beside)"},
+   {"id": "year_over_year", "rule": "This year against last year is the year to date against the same dates last year, never the whole prior year.",
+    "ruled_by": "coordinator", "ruled_on": "2026-11-17", "source": "issue #187, the plan the owner approved"},
+   {"id": "volume", "rule": "Until shipments are in the records, volume means production MSF, and the answer says so.",
+    "applies": {"measure": "msf", "says": "Volume is production MSF: the records hold no shipments."},
+    "ruled_by": "owner", "ruled_on": "2026-11-17", "source": "issue #187, the SLT question set"},
+   {"id": "by_machine", "rule": "The records hold one corrugator: a question by machine is answered for that machine and says so; a request split by machine is refused with that reason, never as a dimension the model lacks.",
+    "applies": {"words": ["machine", "machines", "corrugator", "corrugators"], "says": "The records hold one corrugator, so by machine is the whole of it."},
+    "ruled_by": "coordinator", "ruled_on": "2026-11-17", "source": "issue #187"},
+   {"id": "speed_loss", "rule": "Speed loss by contributor ranks together the feet each unplanned stop reason cost (its minutes at the stopped setup's grade baseline; planned maintenance and a power outage left out) and each grade's speed gap (the feet its paper runs ran under its baseline while running), largest first, top 3.",
+    "applies": {"measures": ["stop_loss_ft", "speed_gap_ft"], "limit": 3},
+    "ruled_by": "owner-pending", "ruled_on": "2026-11-17", "source": "issue #187 (targets.json defines the baseline and the gap)"},
+   {"id": "peel_core_weight", "rule": "Peel and core are read as a percent of the paper consumed (fed, peeled and left on cores) by weight: each roll's paper grade names its basis weight in lb per MSF.",
+    "applies": {"measure": "peel_core_pct"}, "ruled_by": "coordinator", "ruled_on": "2026-11-17", "source": "issue #187"},
+   {"id": "customer_credits", "rule": "Customer credits are refused naming what is missing, shipments; credits for bond or warp join the dry-end reject family once shipment records exist.",
+    "applies": {"absent": "customer_credits"}, "ruled_by": "owner", "ruled_on": "2026-11-17", "source": "issue #187, the SLT question set"}
+  ]
  },
  "dimensions": [
   {"name": "day", "label": "Production day", "type": "time", "grain": "day", "entity": "*", "expr": "{production_date}",
@@ -312,6 +375,50 @@
    "lever": "controllable", "tool": "get_waste_breakdown usd (unexplained)", "synonyms": ["unexplained dollars", "other waste cost"]},
   {"name": "downtime_usd", "label": "Downtime, priced", "unit": "$", "agg": "priced", "quantity": "downtime_minutes", "price_kind": "downtime",
    "description": "Minutes stopped priced as machine time at the assumed machine rate. Filtered to the order-change reason, it is the setups bucket of where the money went.",
-   "lever": "controllable", "tool": "get_downtime_pareto usd; get_downtime_breakdown usd", "synonyms": ["downtime dollars", "downtime cost", "cost of downtime"]}
+   "lever": "controllable", "tool": "get_downtime_pareto usd; get_downtime_breakdown usd", "synonyms": ["downtime dollars", "downtime cost", "cost of downtime"]},
+  {"name": "baseline_run_ft", "label": "Feet at grade baseline, running", "unit": "ft", "entity": "setup", "agg": "sum", "expr": "{baseline_fpm} * ({elapsed_seconds} - {stop_seconds}) / 60",
+   "description": "The feet each setup would have run at its grade's speed baseline over its running minutes.",
+   "lever": "controllable", "tool": "get_speed_variance below_baseline (the baseline's feet)", "synonyms": []},
+  {"name": "baseline_speed_fpm", "label": "Grade baseline speed", "unit": "ft/min", "agg": "ratio", "numerator": "baseline_run_ft", "denominator": "running_minutes",
+   "description": "Feet at the grade baseline over running minutes: by grade, the grade's own baseline; over a mix of grades, their baselines weighted by running time.",
+   "lever": "controllable", "tool": "get_speed_variance baseline_fpm; record_store.grade_speed_baselines", "synonyms": ["baseline speed", "grade baseline"]},
+  {"name": "speed_gap_ft", "label": "Footage recoverable", "unit": "ft", "entity": "setup", "agg": "sum", "expr": "{baseline_fpm} * ({elapsed_seconds} - {stop_seconds}) / 60 - {lineal_ft}",
+   "each": {"of": ["{production_date}", "{shift}", "{wet_end_id}"], "at_least": 0},
+   "description": "The speed gap in feet (targets.json): each paper run's feet at its grade's baseline in its running minutes, less the feet it ran, where it ran under the baseline (a run over its baseline has no gap), summed over the runs; the footage recoverable by closing the gap. A run is a paper run on its production day and shift, as the money ledger cuts it, so the shifts add up to the day.",
+   "lever": "controllable", "tool": "record_store.speed_baseline_gap gap_ft (summed by grade)", "synonyms": ["recoverable footage", "recoverable feet", "speed gap feet"]},
+  {"name": "below_baseline_ft", "label": "Feet under grade baseline, net", "unit": "ft", "entity": "setup", "agg": "sum", "expr": "{baseline_fpm} * ({elapsed_seconds} - {stop_seconds}) / 60 - {lineal_ft}",
+   "description": "The feet the setups would have run at their grade's baseline in their running minutes, less the feet they ran, netted over every setup: the speed variance's running under baseline, negative where they ran faster than the baseline.",
+   "lever": "controllable", "tool": "get_speed_variance below_baseline (by grade)", "synonyms": []},
+  {"name": "speed_gap_fpm", "label": "Shortfall on runs under baseline", "unit": "ft/min", "agg": "ratio", "numerator": "speed_gap_ft", "denominator": "running_minutes",
+   "description": "The speed gap in ft/min: the footage recoverable (the feet the paper runs under their grade's baseline fell short by) over all the running minutes, what closing every run's gap would add to the speed without stops. Never negative: a run over its baseline has no gap and offsets none. So it is not the grade baseline less the speed without stops, and its label says so.",
+   "lever": "controllable", "tool": "none (record_store.speed_baseline_gap keeps the gap in feet and minutes)", "synonyms": ["speed gap", "gap to baseline"]},
+  {"name": "stop_loss_ft", "label": "Feet lost to unplanned stops", "unit": "ft", "entity": "stop", "agg": "sum", "expr": "{seconds} / 60 * {baseline_fpm}",
+   "filter": {"kind": ["Maintenance", "Operator"]},
+   "description": "The feet unplanned stops (maintenance and operator) cost: each stop's minutes at the speed baseline of the stopped setup's grade. Planned maintenance (schedule-driven) and a power outage (external) are left out.",
+   "lever": "controllable", "tool": "get_speed_variance stops (the feet behind each reason's loss)", "synonyms": ["feet lost to stops"]},
+  {"name": "downtime_clock_pct", "label": "Downtime of the setup clock", "unit": "% of setup clock", "agg": "ratio", "numerator": "downtime_minutes", "denominator": "elapsed_minutes", "scale": 100,
+   "description": "Minutes stopped as a percent of the setups' own clocks: by grade, the share of that grade's time on the machine it was stopped.",
+   "lever": "controllable", "tool": "none on this store yet (stops over the setup clock)", "synonyms": ["downtime of the clock"]},
+  {"name": "paper_consumed_lb", "label": "Paper consumed by weight", "unit": "lb", "entity": "roll", "agg": "sum", "expr": "{basis_lb} * ({fed_sqft} + {peel_sqft} + {core_sqft}) / 1000",
+   "description": "The paper the rolls gave up, by weight: fed into the paper runs, peeled at roll prep and left on the core, each at its paper grade's basis weight in lb per MSF.",
+   "lever": "controllable", "tool": "none (get_rollstock reads the paper runs' area)", "synonyms": []},
+  {"name": "peel_lb", "label": "Peel by weight", "unit": "lb", "entity": "roll", "agg": "sum", "expr": "{basis_lb} * {peel_sqft} / 1000",
+   "description": "The outer wraps stripped at roll prep, by weight.",
+   "lever": "controllable", "tool": "none on this store yet", "synonyms": []},
+  {"name": "core_lb", "label": "Core by weight", "unit": "lb", "entity": "roll", "agg": "sum", "expr": "{basis_lb} * {core_sqft} / 1000",
+   "description": "The paper left on the core when a roll was spliced out, by weight.",
+   "lever": "controllable", "tool": "none on this store yet", "synonyms": []},
+  {"name": "peel_core_lb", "label": "Peel and core by weight", "unit": "lb", "entity": "roll", "agg": "sum", "expr": "{basis_lb} * ({peel_sqft} + {core_sqft}) / 1000",
+   "description": "Peel and core together, by weight.",
+   "lever": "controllable", "tool": "none on this store yet", "synonyms": []},
+  {"name": "peel_pct", "label": "Peel of paper consumed", "unit": "% of roll stock consumed", "agg": "ratio", "numerator": "peel_lb", "denominator": "paper_consumed_lb", "scale": 100, "band": "peel",
+   "description": "Peel as a percent of the paper consumed, by weight, against the owner's peel band.",
+   "tool": "none on this store yet", "synonyms": ["peel %", "peel percent"]},
+  {"name": "core_pct", "label": "Core of paper consumed", "unit": "% of roll stock consumed", "agg": "ratio", "numerator": "core_lb", "denominator": "paper_consumed_lb", "scale": 100, "band": "core",
+   "description": "Core as a percent of the paper consumed, by weight, against the owner's core band.",
+   "tool": "none on this store yet", "synonyms": ["core %", "core percent"]},
+  {"name": "peel_core_pct", "label": "Peel and core of paper consumed", "unit": "% of roll stock consumed", "agg": "ratio", "numerator": "peel_core_lb", "denominator": "paper_consumed_lb", "scale": 100,
+   "description": "Peel and core together as a percent of the paper consumed, by weight: the pounds stripped and left on cores over the pounds the rolls gave up. The owner's bands are for each one.",
+   "lever": "controllable", "tool": "none on this store yet", "synonyms": ["peel and core %", "peel and core percent"]}
  ]
 }

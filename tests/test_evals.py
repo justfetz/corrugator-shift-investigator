@@ -482,6 +482,23 @@ def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
     assert outcome == 'pass' and ms > 250, (failures, note, ms)
 
 
+@pytest.mark.parametrize('case_id', ['examples-customer-credits-for-bond-and-warp-refused-naming-shipments',
+                                     'examples-shear-percent-by-machine-is-the-one-corrugator',
+                                     'examples-pounds-of-peel-answers-peel-lb',
+                                     'examples-weight-of-paper-consumed-answers-paper-consumed-lb'])
+def test_a_known_defect_xfails_whether_it_answers_or_refuses(case_id):
+    """The coordinator's review of 91e8b33, item 3: the two bugs PR #189 found are golden cases marked known_defect for #172. One
+    answers where it should refuse, the other refuses where it should answer; either way the runner shows it as xfail with its
+    defect, never a failure of the gate, and the same case without the marker fails. The review of e545dfb, item 2, adds two more
+    for #172: 'pounds of peel this week' is refused where the semantic model's peel_lb answers it, and 'weight of paper consumed
+    this month' answers MSF, an area, where paper_consumed_lb is the weight asked."""
+    case = next(c for c in CASES if c['id'] == case_id)
+    outcome, failures, note, _ = golden.run_case(case)
+    assert outcome == 'xfail' and failures and note.startswith('known defect: Issue #172'), (outcome, failures, note)
+    unmarked = {k: v for k, v in copy.deepcopy(case).items() if k != 'known_defect'}
+    assert golden.run_case(unmarked)[0] == 'fail'
+
+
 def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it():
     """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
     a case whose question lands elsewhere, and every offline question is also answered over its URL."""
@@ -495,13 +512,16 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # + the review of 7b46463's 5 + its probe's 4 + the reviewer's check of its fix, 1 + the review of 97b81f4's 9 + its probe's 1
     # + the reviewer's check of its fix, 2 + the review of 2c28fd3's 2 + the reviewer's check of its fix, 1
     # + 7 issue #164 money ledger cases + 1 asked by question in PR #168's fix round + 11 issue #177 All-day cases + 9 issue #177
-    # named-shift-list cases + 19 issue #185 top-N and year-to-date cases + 5 from the reviewer's check of its first fix + 1 of its second
-    # + PR #186's first coordinator review, 14 (three of them the owner's review kept on 'What were the downtime reasons yesterday?'),
-    # and the reviewer's check of that fix round, 4 + its second coordinator review, 33 (a month with its year, a top N up to 200 in full,
-    # the selected period by its number, the words said short, the waste breakdown of a month named and two guards beside it) + the
-    # reviewer's check of that round, 14, and its re-check, 11 + the coordinator's review at 9d12f76 (round 3), 9 (the period before by
-    # its number compared, the review kept beside it, and two named dates that keep main's answer) + the reviewer's check of that fix, 5, and its re-check, 2
-    assert len(routing) == 656 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # named-shift-list cases + 7 issue #187 questions the verified examples' measures answer + its first fix round's 2 (the paper consumed
+    # in area, and shear by machine, a known defect for #172) + its second fix round's 2 known defects for #172 (pounds of peel as
+    # peel_lb, the weight of paper consumed as paper_consumed_lb) + 19 issue #185 top-N and year-to-date cases + 5 from the reviewer's
+    # check of its first fix + 1 of its second + PR #186's first coordinator review, 14 (three of them the owner's review kept on 'What
+    # were the downtime reasons yesterday?'), and the reviewer's check of that fix round, 4 + its second coordinator review, 33 (a month
+    # with its year, a top N up to 200 in full, the selected period by its number, the words said short, the waste breakdown of a month
+    # named and two guards beside it) + the reviewer's check of that round, 14, and its re-check, 11 + the coordinator's review at 9d12f76
+    # (round 3), 9 (the period before by its number compared, the review kept beside it, and two named dates that keep main's answer)
+    # + the reviewer's check of that fix, 5, and its re-check, 2
+    assert len(routing) == 667 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

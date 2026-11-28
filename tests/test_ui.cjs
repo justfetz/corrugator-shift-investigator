@@ -833,12 +833,17 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   turns:[{question:'Why was this shift slow?',status:'complete',mode:'offline',sections:['Shift 2: 600 ft/min.'],narrative:[],usage:{tool_calls:2,model_calls:0},trace:[{tool:'get_shift_kpis',ok:true,elapsed_ms:1,arguments:{shift:2},data:{shift:2,coverage:'complete',rows:[{}]}},{tool:'get_downtime_breakdown',ok:true,elapsed_ms:1,arguments:{shift:2,group_by:'reason'},data:{shift:2,coverage:'complete',rows:[]}}]}],
   ...(id.includes('@')?{recording:{...rec,exchanges:[{model:'claude-haiku-5-5',http_status:200,calls:[{tool:'get_shift_overview',arguments:{shift:2}}],text:''},{model:'claude-haiku-5-5',http_status:200,calls:[],text:'done'}]}}:{})});
  const calls=[], urls=[];
+ let allOutcomes=null;   // run id -> outcome for the next Run all; null: value-kpis fails, the rest pass
  const fetchStub=async(path,init)=>{
   calls.push([init&&init.method||'GET',path,init&&init.body?JSON.parse(init.body):null,init&&init.headers?init.headers['X-Workbench-Token']:undefined]);
   if(path==='/evals.json')return {ok:true,status:200,json:async()=>board};
   if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'tok'})};
   const body=JSON.parse(init.body);
-  if(body.all)return {ok:true,status:200,json:async()=>({ran_at:'2026-11-09T20:01:00Z',total:4,passed:3,failed:1,skipped:0,latency_ms:{p50:10,p95:40},model_called:false,cached:false,rows:board.cases.flatMap(c=>c.runs).map(r=>({id:r.id,case:r.id.split('@')[0],type:'routing',provider:r.provider,outcome:r.id==='value-kpis'?'fail':'pass',failures:[],note:'',ms:10}))})};
+  if(body.all){
+   const rows=board.cases.flatMap(c=>c.runs).map(r=>({id:r.id,case:r.id.split('@')[0],type:'routing',provider:r.provider,outcome:allOutcomes?allOutcomes[r.id]:r.id==='value-kpis'?'fail':'pass',failures:[],note:'',ms:10}));
+   const count=o=>rows.filter(r=>r.outcome===o).length;
+   return {ok:true,status:200,json:async()=>({ran_at:'2026-11-09T20:01:00Z',total:4,passed:count('pass'),failed:count('fail'),skipped:count('skip'),known_defects:count('xfail'),latency_ms:{p50:10,p95:40},model_called:false,cached:false,rows})};
+  }
   return {ok:true,status:200,json:async()=>result(body.id)};
  };
  const doc={getElementById:id=>{assert.ok(els[id],`Unknown evals control ${id}`);return els[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag)};
@@ -886,6 +891,15 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(els['run-status'].textContent,/3\/4 passed, 1 failed \(value-kpis\) · offline p50 10 ms, p95 40 ms · no model called$/);
  assert.deepEqual(els['score-table'].children[1].children.map(tr=>tr.children[4].textContent),['3/3','0/1','3/4']);
  assert.equal(els['run-all'].disabled,false);
+ // the coordinator's review of e545dfb, item 3: a known defect (xfail) is shown as a known defect, never counted as a skip
+ allOutcomes={'why-slow':'pass','why-slow@anthropic':'skip','live-why-slow@anthropic':'xfail','value-kpis':'xfail'};
+ await els['run-all'].events.click();
+ assert.match(els['run-status'].textContent,/: 1\/4 passed, 1 skipped, 2 known defects · offline p50 10 ms, p95 40 ms · no model called$/);
+ allOutcomes={'why-slow':'pass','why-slow@anthropic':'pass','live-why-slow@anthropic':'pass','value-kpis':'xfail'};
+ await els['run-all'].events.click();
+ assert.match(els['run-status'].textContent,/: 3\/4 passed, 1 known defect · offline p50/);
+ assert.ok(!/skipped/.test(els['run-status'].textContent));
+ allOutcomes=null;
  // no model calls from the page: it talks to these three paths on its own origin and nothing else
  assert.deepEqual([...new Set(calls.map(c=>c[0]+' '+c[1]))].sort(),['GET /api/config','GET /evals.json','POST /api/evals/run']);
  assert.deepEqual([...new Set([...src.matchAll(/fetch\(([^,)]+)/g)].map(m=>m[1]))].sort(),["'/api/config'","'/api/evals/run'","'/evals.json'"]);
@@ -1262,7 +1276,29 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(eels['judge-detail'].hidden,false);
  const nrows=eels['judge-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent));
  assert.deepEqual(nrows,[['a@anthropic:1','1','1','0','1','1','prescribes_nothing: It tells the crew what to compare.'],['b@anthropic:1','1','1','1','—','0','unavailable_not_zero: judge error: bad JSON · comparisons_consistent: 467.45 is below the 500.00 target']]);
- console.log('UI issue-25 checks passed: grading page lists, filters, refuses a bad grade without a reason, saves one with the token, never fetches the judge; /evals draws the judge table and agreement.');
+ // issue #187: with no reading score on the newest run the page says how to write one; with one, the line and every wording missed,
+ // and apart, every wording asked in a stand-in window (the coordinator's review of 91e8b33, item 1: never counted as a pass)
+ assert.equal(eels['reading-summary'].textContent,'No reading score is tracked with the newest run: python3 evals/run.py --track writes it.');
+ assert.equal(eels['reading-detail'].hidden,true); assert.equal(eels['stand-in-detail'].hidden,true);
+ const reading={read:1,of:4,owner_read:0,owner_of:1,examples:1,stand_in:2,page:{day:'2026-09-14',shift:2,scope:'shift'},
+  misses:[{example:'top-maintenance-downtimes',text:'What are our top maintenance downtimes?',owner:true,window:'last_week',read_as:'downtime answer (the daily tools)'}],
+  stand_ins:[{example:'top-maintenance-downtimes',text:'top maintenance downtime reasons this year',owner:false,window:'ytd',read_as:"refused: 'this year' is not a window"},
+             {example:'top-maintenance-downtimes',text:'top 5 maintenance downtime reasons by minutes year to date',owner:false,window:'ytd',read_as:'semantic: downtime (min)'}]};
+ const rctx={document:{getElementById:id=>{assert.ok(eels[id],`Unknown evals control ${id}`);return eels[id];},createElement:tag=>new El(tag),createElementNS:(_,tag)=>new El(tag)},
+  fetch:async path=>path==='/evals.json'?{ok:true,status:200,json:async()=>({...board,reading})}:{ok:true,status:200,json:async()=>({token:'tok',public:true})},
+  window:{innerWidth:1200,location:{search:''},history:{replaceState(){}}},console,URLSearchParams};
+ vm.createContext(rctx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),rctx);vm.runInContext(esrc,rctx);await vm.runInContext('ready',rctx);
+ assert.equal(eels['reading-summary'].textContent,'Verified examples read correctly: 1 of 4 wordings of 1 examples (the owner’s own words: 0 of 1), asked on 2026-09-14 with the page on shift 2 · 2 asked in a stand-in window, never counted as a pass: a window the model does not read yet is read in its interim');
+ assert.equal(eels['reading-detail'].hidden,false);
+ assert.equal(eels['reading-rows-title'].textContent,'Wordings read another way (1)');
+ assert.deepEqual(eels['reading-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent)),
+  [['top-maintenance-downtimes','Owner: What are our top maintenance downtimes?','last_week','downtime answer (the daily tools)']]);
+ assert.equal(eels['stand-in-detail'].hidden,false);
+ assert.equal(eels['stand-in-rows-title'].textContent,'Wordings asked in a stand-in window, never a pass (2)');
+ assert.deepEqual(eels['stand-in-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent)),
+  [['top-maintenance-downtimes','top maintenance downtime reasons this year','ytd',"refused: 'this year' is not a window"],
+   ['top-maintenance-downtimes','top 5 maintenance downtime reasons by minutes year to date','ytd','semantic: downtime (min)']]);
+ console.log('UI issue-25 checks passed: grading page lists, filters, refuses a bad grade without a reason, saves one with the token, never fetches the judge; /evals draws the judge table and agreement, and the verified examples\' reading score.');
 })().catch(error=>{console.error(error);process.exit(1);});
 
 // ---- issue #31b: the money on the card. The why-slow answer (tests/ui_fixtures/why_slow.json) lands with the cost
