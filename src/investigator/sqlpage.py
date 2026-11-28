@@ -12,8 +12,9 @@ refusal cases from `evals/golden.json`, and the reading score from `examples.rea
 The page states facts about those blocks, and each one is checked here, so the build fails rather than print a page that
 disagrees with the code (`PageError`): the router reads the question as the verified example's plan, the SQL the answer
 ran is the statements `compile_query` returns, each piece of the model the page shows is in that SQL, every bound value
-is named, the fixed tool's question is a routing golden that runs that tool, the oracle is the test's own, and the value
-golden's total is the answer's total.
+is the value its label names, the fixed tool's question is a routing golden that runs that tool over the same week, the
+oracle is the test's own and, run here on the worked week (the test runs it in the example's other windows), agrees with
+the example as the test compares them, and the value golden's total is the answer's total.
 
 The records are the golden window's (the window ending `evals/golden_values.json`'s `as_of`, as the image builds
 `/app/prebuilt-golden`): the process's own store when it holds that window (pytest pins it), else the prebuilt folder
@@ -43,6 +44,7 @@ REFUSAL_CASE = 'semantic-refusal-lists-every-value'
 VALUE_CASE = 'value-semantic-downtime-by-grade-maintenance-week-0914'
 VALUE_FUNCTION = 'semantic_downtime_by_grade_case'
 SHOWN_IDS = 3                     # record ids a rows table prints of each row's receipt; the receipt link holds them all
+ORACLE_TOLERANCE = 0.01           # tests/test_examples.py compares the example with its oracle within this (pytest.approx abs)
 
 
 class PageError(ValueError):
@@ -149,12 +151,16 @@ def _case(root, path, case_id):
 
 
 def _bound(statement, labels):
-    """A statement's bound values beside the `?` each fills, in order; every value must have a name."""
+    """A statement's bound values beside the `?` each fills, in order. `labels` are (the value the page expects, what it is):
+    every value must be named, and be the value its name says."""
     if len(labels) != len(statement.params) or statement.sql.count('?') != len(statement.params):
         raise PageError(f'the {statement.name} statement binds {len(statement.params)} values for '
                         f'{statement.sql.count("?")} placeholders, and the page names {len(labels)}')
+    for value, (expected, label) in zip(statement.params, labels):
+        if value != expected:
+            raise PageError(f'the {statement.name} statement binds {value!r} where the page names {label} ({expected!r})')
     rows = []
-    for i, (value, label) in enumerate(zip(statement.params, labels)):
+    for i, (value, (_, label)) in enumerate(zip(statement.params, labels)):
         shown = value.isoformat() if isinstance(value, date) else _number(value)
         rows.append([str(i + 1), _code(shown), label])
     return _table(['Placeholder', 'Bound value', 'What it binds'], rows)
@@ -192,14 +198,17 @@ def figures(root, store=None):
     if request.get('intent') != 'semantic' or len(plan) != 1 or plan[0]['tool'] != semantic.TOOL:
         raise PageError(f'the router no longer reads {QUESTION!r} into one semantic query: {request.get("intent")}')
     arguments = plan[0]['arguments']
-    try:   # what the hand router alone makes of the words, before the semantic parser reads them
+    try:   # what the hand router alone makes of the words, as parse_request runs it before the semantic parser reads them
         hand = agent._parse_request(QUESTION, read_context)
+        agent.catch_all_guard(agent.correct_typos(QUESTION.lower()), hand)
     except ValueError as exc:
-        out['hand.reading'] = f'refuses it ("{_cell(exc)}")'
+        out['hand.reading'] = f'would refuse it ("{_cell(exc)}")'
     else:
         tools = [s['tool'] for s in hand.get('plan') or []]
-        out['hand.reading'] = (f'answers it with {", ".join(_code(t) for t in tools)}' if tools
-                               else f'answers it as its {_code(hand.get("intent"))} card, which is not the ranking asked')
+        if semantic.TOOL in tools:
+            raise PageError('the hand router now answers the worked question itself: the page says the parser does')
+        out['hand.reading'] = (f'would answer it with {", ".join(_code(t) for t in tools)}, a review of every stop reason rather than the '
+                               'ranking asked,' if tools else f'would answer it as its {_code(hand.get("intent"))} card, not the ranking asked,')
     read = {k: arguments.get(k) for k in want}
     if read != {**want, 'window': read['window']} or semantic.parse_window(read['window'])[2:] != (start, end):
         raise PageError(f'the router reads {QUESTION!r} as {read}, not as the verified example {EXAMPLE} in {EXAMPLE_WINDOW}: {want}')
@@ -226,8 +235,26 @@ def figures(root, store=None):
     if len(read_as) != 1:
         raise PageError('the answer has no Read as line')
     out['read_as'] = _quote(read_as)
+    if re.search(r'\b(first|top) ', read_as[0]):
+        out['read_as.limit'] = 'The line names the limit too.'
+    elif data['groups'] <= arguments['limit']:
+        out['read_as.limit'] = (f'The line leaves the limit out because it cuts nothing: this week the split has {data["groups"]} rows, no '
+                                f'more than the limit, so every row is listed. The limit is in the plan and in the address (`top=`).')
+    else:
+        raise PageError('the Read as line leaves out a limit that cuts rows')
+    kinds = semantic.store_values('kind', store, mdl) or []
+    out['kinds'] = ', '.join(_code(k) for k in kinds)
+    if valid_kind := arguments['filters'].get('kind'):
+        if valid_kind not in kinds:
+            raise PageError(f'the records hold no stop kind {valid_kind}')
     out['card'] = _quote([s for s in result['sections'] if not s.startswith('Read as:')][:1])
     out['card.tools'] = ', '.join(_code(e['tool']) for e in result['trace'])
+    ref = re.search(r'\(query (\d+) · row (\d+)\)', result['sections'][0])
+    step = result['trace'].index(entry) + 1
+    if not ref or (int(ref.group(1)), int(ref.group(2))) != (step, 0):
+        raise PageError('the first finding does not cite the first row of the semantic query')
+    out['card.ref'] = (f'`query {step} · row 0` is the first row of step {step}, the semantic query\'s rows statement. Steps count from 1 '
+                       'in the order they ran, and rows from 0 in the order the step returned them.')
 
     # 2. Validation: the plan as validate returns it, and one plan it refuses.
     valid = semantic.validate(arguments, store)
@@ -276,13 +303,15 @@ def figures(root, store=None):
             raise PageError(f'{name} ({sql}) is not in the compiled SQL')
     out['pieces'] = _table(['Piece', 'In the model', 'In the SQL'], [[n, m, _code(s)] for n, m, s in pieces])
     labels_of = {'groups': 'the rows, one per reason', 'total': 'the total over every row'}
+    if [s.name for s in compiled.statements] != list(labels_of):
+        raise PageError(f'compile_query returns other statements than the page describes: {[s.name for s in compiled.statements]}')
     blocks = []
     for statement in compiled.statements:
-        labels = ['the window\'s first production day', 'the window\'s last production day']
-        labels += [f'the {dim} filter' for dim in valid.filters]
+        labels = [(start, 'the window\'s first production day'), (end, 'the window\'s last production day')]
         if valid.shift is not None:
-            labels.insert(2, 'the shift')
-        labels.append('the row limit' if statement.name == 'groups' else 'one row')
+            labels.append((valid.shift, 'the shift'))
+        labels += [(value, f'the {dim} filter') for dim, value in valid.filters.items()]
+        labels.append((statement.params[-1], 'the rows the statement returns at most') if statement.name == 'groups' else (1, 'one row'))
         blocks.append(f'**{_cell(statement.name)}**: {labels_of.get(statement.name, statement.name)}.\n\n{_fence(statement.sql, "sql")}\n\n'
                       + _bound(statement, labels))
     out['compiled'] = '\n\n'.join(blocks)
@@ -332,13 +361,19 @@ def figures(root, store=None):
     sql = pareto['trace']['sql'].split(';\n')   # the envelope joins a tool's statements as the query box shows them
     if len(set(sql)) != 1 or len(sql) != len(pareto['trace']['parameters']):
         raise PageError(f'{FIXED_TOOL} ran more than one statement text')
-    windows = ['the week asked', 'the week before']
+    windows = [(pareto['window'], 'the week asked'), (pareto['previous_window'], 'the week before')]
+    runs = pareto['trace']['parameters']
+    if len(runs) != len(windows) or any(p[:2] != [w['start'], w['end']] for p, (w, _) in zip(runs, windows)):
+        raise PageError(f'{FIXED_TOOL} no longer runs once for the week asked and once for the week before')
+    links = (fixed_source.get('rows') or {}).get('row') or []
+    if len(links) != len(pareto['rows']) or not all(links):
+        raise PageError(f'a row of {FIXED_TOOL} has no receipt link')
     out['fixed.sql'] = _fence(sql[0], 'sql')
-    out['fixed.parameters'] = _table(['Run', 'Bound values'], [[w, _code(json.dumps(p))] for w, p in zip(windows, pareto['trace']['parameters'])])
+    out['fixed.parameters'] = _table(['Run', 'Bound values'], [[label, _code(json.dumps(p))] for p, (_, label) in zip(runs, windows)])
     out['fixed.group_by'] = _code(call['group_by'])
-    out['fixed.rows'] = _table(['Category', 'Stops', 'Minutes', 'Share %', 'Receipt in /data'],
+    out['fixed.rows'] = _table(['Category', 'Stops', 'Minutes', 'Share %', 'Minutes the week before', 'Receipt in /data'],
                                [[r['category'], _code(r['stops']), _code(_number(r['minutes'])), _code(_number(r['share_pct'])),
-                                 f'[the rows]({link})' if link else ''] for r, link in zip(pareto['rows'], (fixed_source.get('rows') or {}).get('row') or [None] * len(pareto['rows']))])
+                                 _code(_number(r['previous_minutes'])), f'[the rows]({link})'] for r, link in zip(pareto['rows'], links)])
     out['fixed.case'] = _json({k: fixed_case[k] for k in ('id', 'type', 'question') if k in fixed_case}
                               | {'expect': {k: fixed_case['expect'][k] for k in ('url', 'tools') if k in fixed_case['expect']}})
     out['fixed.case_id'] = _code(FIXED_CASE)
@@ -365,7 +400,34 @@ def figures(root, store=None):
     out['oracle.name'] = _code(oracle)
     anchors = _constant(root / 'tests/test_examples.py', 'ANCHORS')
     out['oracle.anchors'] = ' and '.join(_code(a) for a in anchors)
-    out['oracle.windows'] = ', '.join(_code(w) for w in [example['plan']['window'], *example.get('alternates', [])])
+    labels = {w['name']: w['label'] for w in mdl.spec['defaults']['relative_windows']}
+    out['oracle.windows'] = ', '.join(f'{_code(w)} ({labels.get(w, w).lower()})' for w in [example['plan']['window'], *example.get('alternates', [])])
+    stand_in = [w for w in mdl.spec['defaults']['relative_windows'] if w.get('interim') and w['period'] not in semantic.WINDOW_PERIODS]
+    out['oracle.stand_in'] = (' '.join(f'The model does not read the {w["label"].lower()} yet, so the example\'s {_code(w["name"])} is asked in '
+                                       f'a stand-in window, here and in the test. The model file says: "{_cell(w["description"])}"' for w in stand_in)
+                              or 'Every window the example names is one the model reads.')
+    # The oracle run here on the worked week, beside the example's own answer, compared as the test compares them.
+    namespace = {'date': date}
+    exec(compile(_function_source(root / 'tests/test_examples.py', 'q') + '\n\n' + _function_source(root / 'tests/test_examples.py', oracle),
+                 'tests/test_examples.py', 'exec'), namespace)
+    want_rows = namespace[oracle](store, start, end)
+    got = examples.run_example(example, store, day, EXAMPLE_WINDOW, mdl)
+    if (got['window']['start'], got['window']['end']) != (start.isoformat(), end.isoformat()) or not want_rows \
+            or [tuple(r['key'].values()) for r in got['rows']] != [w[0] for w in want_rows]:
+        raise PageError(f'the oracle and the example {EXAMPLE} list other rows for the worked week')
+    oracle_rows = []
+    for row, (key, value, other) in zip(got['rows'], want_rows):
+        fields = {'value': (row['value'], value), **{f: (row.get('beside', {}).get(f, row.get(f)), v) for f, v in other.items()}}
+        if any(a is None or abs(a - b) > ORACLE_TOLERANCE for a, b in fields.values()):
+            raise PageError(f'the oracle and the example {EXAMPLE} disagree on {key} in the worked week: {fields}')
+        oracle_rows.append([row['label']] + [f'{_code(_number(a))} · {_code(_number(b))}' for a, b in fields.values()])
+    if [w[0] for w in want_rows] != [(r[dim],) for r in data['rows']] or any(abs(w[1] - r['value']) > ORACLE_TOLERANCE for w, r in zip(want_rows, data['rows'])):
+        raise PageError('the oracle\'s rows for the worked week are not the answer\'s rows')
+    out['oracle.rows'] = _table([mdl.dimensions[dim]['label'], *[f'{f} (example · oracle)' for f in fields]], oracle_rows)
+    out['oracle.beside'] = ', '.join(_code(b) for b in example.get('beside', [])) or 'none'
+    out['oracle.tolerance'] = _code(_number(ORACLE_TOLERANCE))
+    if f'abs={ORACLE_TOLERANCE}' not in _function_source(root / 'tests/test_examples.py', 'test_example_equals_its_oracle'):
+        raise PageError(f'test_example_equals_its_oracle no longer compares within {ORACLE_TOLERANCE}')
     out['oracle.test'] = _code('test_example_equals_its_oracle')
     if 'def test_example_equals_its_oracle' not in (root / 'tests/test_examples.py').read_text(encoding='utf-8'):
         raise PageError('tests/test_examples.py has no test_example_equals_its_oracle')
@@ -381,20 +443,19 @@ def figures(root, store=None):
     out['score.rows'] = _table(['Wording', 'Whose', 'Window', 'Outcome', 'Read as'],
                                [[f'"{r["text"]}"', 'the owner\'s' if r['owner'] else 'a rewording', _code(r['window'] or 'none said'),
                                  r['outcome'], r['read_as']] for r in score['rows']])
-    out['score.line'] = _code(examples.score_line(score))
     return out
 
 
 BLOCK = re.compile(r'([ \t]*)\{\{\s*([a-z][a-z0-9_.]*)\s*\}\}[ \t]*')
-INLINE_CODE = re.compile(r'(`+)(.+?)(?<!`)\1(?!`)')
 
 
 def check_source(text):
-    """Lines of docs/SQL.md that type what the page renders: a code block of its own, or a number outside inline code."""
+    """Lines of docs/SQL.md that type what the page renders: a code block of its own (fenced, or indented as Markdown's code is),
+    or a number anywhere, inline code included (the command name `python3` aside). Every block and number is a `{{name}}`."""
     from .docsite import typed_numbers
     problems = [f'line {n}: a code block typed into the page' for n, line in enumerate(text.split('\n'), 1)
-                if re.match(r'^\s*(```|~~~)', line)]
-    problems += typed_numbers(INLINE_CODE.sub(' ', text))
+                if re.match(r'^\s*(```|~~~)', line) or (re.match(r'^( {4}|\t)', line) and not BLOCK.fullmatch(line))]
+    problems += typed_numbers(re.sub(r'\bpython3\b', 'python', text))
     return problems
 
 

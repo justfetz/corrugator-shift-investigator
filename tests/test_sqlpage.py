@@ -108,16 +108,19 @@ def test_the_source_types_no_block_and_no_number():
     assert sqlpage.check_source(text) == [], 'the committed page types none of what it renders'
     names = set(docsite.FIGURE.findall(text))
     assert names and names <= set(sqlpage.figures(ROOT)), names - set(sqlpage.figures(ROOT))
-    for typed in ('```sql\nSELECT 1\n```', 'The week holds 70.43 minutes.', 'the top five reasons', 'it runs twice'):
+    for typed in ('```sql\nSELECT 1\n```', '    SELECT reason FROM stops LIMIT ?', '\tSELECT reason FROM stops', 'The week holds 70.43 minutes.',
+                  'the top five reasons', 'it runs twice', 'the slice `[1:50]`', '`LIMIT 5`'):
         assert sqlpage.check_source(f'Intro.\n\n{typed}\n'), typed
-    for fine in ('`python3 evals/run.py` runs it', 'one question, one plan', '{{plan}}', '[#172](https://github.com/justfetz/corrugator-shift-investigator/issues/172)'):
+    for fine in ('`python3 evals/run.py` runs it', 'one question, one plan', '{{plan}}', '    {{plan}}', '`GROUP BY ALL`',
+                 '[#172](https://github.com/justfetz/corrugator-shift-investigator/issues/172)'):
         assert sqlpage.check_source(fine) == [], fine
 
 
-def test_a_block_typed_into_the_source_fails_the_build(tmp_path):
+@pytest.mark.parametrize('typed', ['\n```sql\nSELECT reason FROM stops LIMIT ?\n```\n', '\n    SELECT reason FROM stops LIMIT ?\n'])
+def test_a_block_typed_into_the_source_fails_the_build(tmp_path, typed):
     root = repo_copy(tmp_path)
     page = root / 'docs' / 'SQL.md'
-    page.write_text(page.read_text(encoding='utf-8') + '\n```sql\nSELECT reason FROM stops LIMIT 5\n```\n', encoding='utf-8')
+    page.write_text(page.read_text(encoding='utf-8') + typed, encoding='utf-8')
     with pytest.raises(sqlpage.PageError, match='a code block typed into the page'):
         docsite.build_site(root)
 
@@ -134,6 +137,7 @@ def test_an_unknown_block_fails_the_build(tmp_path):
     ('reading', 'not as the verified example'),
     ('oracle', 'has no function top_maintenance_downtimes'),
     ('value', 'holds no case'),
+    ('oracle-rows', 'disagree on'),
 ])
 def test_a_block_that_cannot_be_rendered_fails_the_build_and_never_the_workbench(tmp_path, monkeypatch, broken, message):
     """The image build is strict; the workbench says why the page is missing and serves every other page as it was."""
@@ -144,6 +148,13 @@ def test_a_block_that_cannot_be_rendered_fails_the_build_and_never_the_workbench
     elif broken == 'oracle':
         oracles = root / 'tests' / 'test_examples.py'
         oracles.write_text(oracles.read_text(encoding='utf-8').replace('def top_maintenance_downtimes(', 'def renamed_oracle('),
+                           encoding='utf-8')
+    elif broken == 'oracle-rows':   # an oracle that reads another definition on the worked week (seconds as minutes)
+        oracles = root / 'tests' / 'test_examples.py'
+        text = oracles.read_text(encoding='utf-8')
+        start = text.index('def top_maintenance_downtimes(')
+        end = text.index('\n\n\n', start)
+        oracles.write_text(text[:start] + text[start:end].replace('sum(seconds) / 60 AS minutes', 'sum(seconds) / 59 AS minutes') + text[end:],
                            encoding='utf-8')
     else:
         monkeypatch.setattr(sqlpage, 'VALUE_CASE', 'value-no-such-case')

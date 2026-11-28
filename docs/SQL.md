@@ -4,11 +4,11 @@ This page follows one question from the words someone types to the SQL that runs
 
 Every code block, plan, bound value and result row below is produced when the docs are built, by the code the app runs: the offline router, the semantic model's validator and compiler, and the record store, over the synthetic records from {{store.first}} to {{store.last}}. The test blocks are read from the test files themselves. The page's source types none of them, and the build fails when a block cannot be rendered or no longer matches what the code does (`src/investigator/sqlpage.py` renders and checks them).
 
-Some words first. The **semantic model** ([its page](../src/investigator/semantic_model.json)) is one file that names what the plant measures (a **measure**, such as downtime minutes), how it can be sliced (a **dimension**, such as the stop reason) and which table and columns hold each (its `physical` block). A **plan** is a request in the model's terms: one measure, what it is split by, its filters, its window, its order and its limit. An **entity** is a kind of record, held in one table: a stop of the downtime log, a run setup, a reject line. A **golden case** is a question with a written expectation that every test run checks (the [golden set](../evals/README.md)), and a **verified example** is one of the owner's own questions with its plan, checked against SQL written by hand ([below](#verified-examples-a-hand-written-sql-oracle)).
+Some words first. The **semantic model** ([its page](../src/investigator/semantic_model.json)) is one file that names what the plant measures (a **measure**, such as downtime minutes), how it can be sliced (a **dimension**, such as the stop reason) and which table and columns hold each (its `physical` block). A **plan** is a request in the model's terms: one measure, what it is split by, its filters, its window, its order and its limit. An **entity** is a kind of record, held in one table: a stop of the downtime log, a run setup, a reject line. A **card** is one answer as the app shows it, and a **step** is one tool call the answer made; the query box under each card shows every step's SQL. A **golden case** is a question with a written expectation that every test run checks (the [golden set](../evals/README.md)); most are asked on one default page, the **golden page**, and the records they read end on a fixed day, so their numbers never move. A **verified example** is one of the owner's own questions with its plan, checked against SQL written by hand ([below](#verified-examples-a-hand-written-sql-oracle)). A row's **receipt** is the count and the ids of the records it summed, with a link to those records ([below](#the-rows-that-come-back-and-their-receipt)).
 
 ## The worked question
 
-The question {{question}}, asked on the page every golden case is asked on (the page's controls: the production day {{page.day}}, shift {{page.shift}}, Window Day). Its answer has an address, as every answer does ([the URL grammar](URLS.md)): {{address}}.
+The question {{question}}, asked on the golden page: the page's controls set to the production day {{page.day}}, shift {{page.shift}}, Window Day. Its answer has an address, as every answer does ([the URL grammar](URLS.md)): {{address}}.
 
 1. [The question and its reading](#the-question-and-its-reading): the plan the words are read into.
 1. [Who makes the reading](#who-makes-the-reading): the offline routers today, a model that writes plans after [#172](https://github.com/justfetz/corrugator-shift-investigator/issues/172).
@@ -23,22 +23,28 @@ The router reads the words into this plan:
 
 {{plan}}
 
-`measure` is what is summed (downtime minutes), `group_by` the split (one row per stop reason), `filters` the rows kept (the stop kind Maintenance), `window` the production week of the selected day, `order` `value` (largest first) and `limit` the rows listed. `shift` null is every shift and `compare` null puts no earlier window beside it.
+`measure` is what is summed (downtime minutes), `group_by` the split (one row per stop reason), `filters` the rows kept, `window` the production week of the selected day, `order` `value` (largest first) and `limit` the rows listed. `shift` null is every shift and `compare` null puts no earlier window beside it.
+
+The question's own words move it off the page's controls ([the scope comes first](ASKING.md#the-scope-comes-first)): "this week" is the Monday-to-Friday week of the selected day, and a quantity asked with no shift named is read over all shifts, so the plan's `shift` is null although the page shows shift {{page.shift}}.
+
+The records hold the stop kinds {{kinds}}. "Maintenance" is the kind `Maintenance`, unplanned maintenance: planned maintenance is its own kind, and a power outage is external, so neither is a row of this answer. A plant reader who counts planned maintenance as maintenance asks for both kinds, and the model has a measure for that (maintenance and planned maintenance minutes, on [its page](../src/investigator/semantic_model.json)).
 
 The answer prints the reading under its findings, so a reader can see what was asked of the data before trusting a number:
 
 {{read_as}}
 
+{{read_as.limit}}
+
 The plan is the verified example {{example.id}} (the owner's {{example.question}}) read in this week: the build fails if the router reads the question any other way.
 
 ### Who makes the reading
 
-Today every question is read offline, by deterministic code and never a model: first by the hand router, then by the semantic parser.
+Today every question typed in the question box is read offline, by deterministic code and never a model. `agent.parse_request` runs its readers in turn:
 
-- **The hand router** (`agent.parse_request`) reads it first, with rules written for the plant's common questions, and answers them through the fixed tools [below](#the-other-source-of-sql-the-fixed-tools).
-- **The semantic parser** (`semantic_parse.py`) then reads it into the model's own words: each measure's and dimension's name, label and synonyms, the values the records hold, and a closed table of ranking words ("top", "most", "by"). When it uses every word of the question, and the hand router refused it or answered something else, its plan answers. Here the hand router alone {{hand.reading}}, so the parser's plan stands.
+- **The hand router** (`agent._parse_request`) reads it first, with rules written for the plant's common questions, and answers them through the fixed tools [below](#the-other-source-of-sql-the-fixed-tools).
+- **The semantic parser** (`semantic_parse.py`) then reads it into the model's own words: each measure's and dimension's name, label and synonyms, the values the records hold, and a closed table of ranking words ("top", "most", "by"). When it uses every word of the question, and the hand router refused it or answered a different question, the parser's plan replaces the hand router's answer. Here the hand router alone {{hand.reading}} so the parser's plan replaces it.
 
-After [#172](https://github.com/justfetz/corrugator-shift-investigator/issues/172) a model reads the questions neither reader can: it writes the same plan, as JSON, and never SQL or a figure. Code validates that plan exactly as below (one retry with the refusal's reason, then a refusal), and the compiler and the store compute every number. The plan is also the address, so a reload replays the answer with no model call.
+A model takes part only when a visitor asks for one: **the analyst** ("Ask the analyst" under a card) is a model that chooses fixed tools and their arguments from their schemas, writes a narrative over their rows, and never writes SQL. After [#172](https://github.com/justfetz/corrugator-shift-investigator/issues/172) a model also reads the questions neither offline reader can: it writes the same plan, as JSON, and never SQL or a figure. Code validates that plan exactly as below (one retry with the refusal's reason, then a refusal), and the compiler and the store compute every number. The plan is also the address, so a reload replays the answer with no model call.
 
 ### Validation: what is refused, and why
 
@@ -72,7 +78,7 @@ Each piece of the plan becomes a piece of SQL. The compiler aliases the entity's
 
 {{pieces}}
 
-The build checks that each of these pieces is in the statements below. The physical names, the expressions and the functions an expression may use are checked when the model loads, so a name that no table holds never reaches a statement.
+The SQL is DuckDB's (the store is an in-memory DuckDB database). Some of its forms may be new to a reader of other dialects: `GROUP BY ALL` groups by every selected column that is not an aggregate; `list(DISTINCT … ORDER BY …)` collects the distinct ids, sorted, and the slice after it keeps the first of them (a list's first item is at position one); and `/` divides as decimals, not whole numbers, so the minutes keep their fractions. The build checks that each of these pieces is in the statements below. The physical names, the expressions and the functions an expression may use are checked when the model loads, so a name that no table holds never reaches a statement.
 
 ### The compiled statements and their bound values
 
@@ -104,7 +110,7 @@ The answer's first finding, as the card prints it:
 
 {{card}}
 
-`(query N · row M)` names the query and the row each bold figure came from; on the card it opens that query's SQL. The answer ran these steps: {{card.tools}}.
+`(query N · row M)` names the step and the row each bold figure came from: {{card.ref}} On the card it opens that step's SQL. The answer ran these steps: {{card.tools}} (the chart is drawn from the first step's rows).
 
 ## The other source of SQL: the fixed tools
 
@@ -124,7 +130,7 @@ It runs once for each week the answer sets side by side:
 
 {{fixed.parameters}}
 
-and the tool orders the rows, computes each share in Python and puts the week before beside each row:
+and the tool orders the rows, computes each share in Python and puts the week before's minutes beside each row:
 
 {{fixed.rows}}
 
@@ -160,7 +166,7 @@ The case {{value.id}} asks the worked week's maintenance minutes split by board 
 
 {{value.arguments}}
 
-Its expected values, each with the tolerance of the tool's rounding (an integer is exact):
+Its expected values. `$` is the result as a whole: its value, its records and `groups`, the number of rows the split has. A count is exact; a figure the compiler leaves unrounded carries a tolerance for floating-point noise only, set by `approx` in the script:
 
 {{value.expect}}
 
@@ -168,11 +174,13 @@ written by {{value.function_name}}:
 
 {{value.function}}
 
+`plain` holds the generator's records by family (`dry_end_setups` are the run setups, `stops` the downtime log), `quality_id` is the board grade, `duration_sec` a stop's seconds, and `approx` and `exact` write an expected value with and without its tolerance. The grade of each stop's setup is looked up from the setups of the window and the day before it.
+
 Its total, {{value.total}}, is the worked answer's total, {{answer.total}}: the same week's maintenance minutes, by another split, by code that shares nothing with the compiler. The build checks that they agree.
 
 ### Verified examples: a hand-written SQL oracle
 
-The verified examples (`src/investigator/examples.json`) are the owner's questions to the plant's leadership, each with its definition and its exact plan. `tests/test_examples.py` holds an **oracle** for each example that answers (a refusal example has none): a SQL query written by hand from the definition, over the store's own tables, that never calls the compiler. The test {{oracle.test}} runs the example through `semantic.run` and the oracle side by side, and asserts the same rows in the same order with the same values.
+The verified examples (`src/investigator/examples.json`) are the owner's questions to the plant's leadership, each with its definition and its exact plan. `tests/test_examples.py` holds an **oracle** for each example that answers (a refusal example has none): a SQL query written by hand from the definition, over the store's own tables, that never calls the compiler. The test {{oracle.test}} runs the example through `semantic.run` and the oracle side by side, and asserts the same rows in the same order, each value within {{oracle.tolerance}}. An oracle is the function in the test file named after its example's id, with each hyphen an underscore. It returns, for each row, the row's key, its value and the other fields to compare.
 
 The worked question is the example {{example.id}}:
 
@@ -182,11 +190,17 @@ Its oracle, {{oracle.name}}, from the test file:
 
 {{oracle}}
 
-beside the compiler's [statements above](#the-compiled-statements-and-their-bound-values). The test runs it in the example's own window and each alternate ({{oracle.windows}}), on each of the pages {{oracle.anchors}}, so a definition that holds in one window and not another fails.
+beside the compiler's [statements above](#the-compiled-statements-and-their-bound-values). Besides the plan's own measure, the example reads {{oracle.beside}} beside each row (the owner's rule for ranking stop reasons), each as a semantic query of its own over the same split, and the oracle computes them too: its `stops` is matched to the example's stops (each reason's `source_count` above), its `minutes_per_stop` to the example's minutes per stop.
+
+The test runs it in the example's own window and each alternate, the windows the owner's rule for an unsaid window puts beside it ({{oracle.windows}}), on each of the pages {{oracle.anchors}}, so a definition that holds in one window and not another fails. {{oracle.stand_in}}
+
+The build runs the same oracle on the worked week and compares it with the example's answer the way the test does, so the page fails to build when they disagree:
+
+{{oracle.rows}}
 
 ### Routing and refusal goldens
 
-`evals/golden.json` holds questions with what must happen: a **routing** case names the address the question must resolve to and the tools that must run, with their arguments; a **refusal** case names the message a question or an address must be refused with. `python3 evals/run.py` asks each one through the router, then again over HTTP at its address (`GET /q` must redirect to the case's address, and the answer there is scored the same way).
+`evals/golden.json` holds questions with what must happen: a **routing** case names the address the question must resolve to and the tools that must run, with their arguments; a **refusal** case names the message a question or an address must be refused with. `python3 evals/run.py` asks each one through the router, then again over HTTP: a typed question goes to `GET /q`, the address the question box submits to, which must redirect to the case's address, and the answer served there is scored the same way.
 
 The fixed tool's question above is this routing case:
 
@@ -218,8 +232,8 @@ None of them shows that the synthetic plant behaves like a real one: they show t
 ## How to add a test query
 
 1. **The question.** Write it as someone in the plant would ask it, with the page it is asked on: the day, the shift and the Window. The golden page is the default.
-1. **The plan.** Write the plan in the model's names ([the semantic model](../src/investigator/semantic_model.json) lists them), and check that it validates: `semantic.validate(plan, default_store())` returns it, or says what is wrong.
-1. **The oracle, by hand.** Write the SQL from the definition, over the store's tables (`stops`, `setups`, `rejects`, `rolls`, `shifts`, `setup_orders`; [the record contract](RECORD_CONTRACT.md)), never through the compiler. For a verified example, add the example to `src/investigator/examples.json` and a function named after its id to `tests/test_examples.py`. For a number a fixed tool or the compiler returns over a window, add a value case to `evals/make_value_goldens.py`, computed in plain Python over the generator's records, and run the script: it rewrites `evals/golden_values.json`, and the diff should add your case and change nothing else.
+1. **The plan.** Write the plan in the model's names ([the semantic model](../src/investigator/semantic_model.json) lists them), and check that it validates: in Python, `semantic.validate(plan, default_store())` (from `investigator.semantic` and `investigator.record_store`) returns it, or says what is wrong.
+1. **The oracle, by hand.** Write the SQL from the definition, over the store's tables (`stops`, `setups`, `rejects`, `rolls`, `shifts`, `setup_orders`; [the record contract](RECORD_CONTRACT.md)), never through the compiler. For a verified example, add the example to `src/investigator/examples.json` and its oracle to `tests/test_examples.py`, a function named after the example's id with each hyphen an underscore. For a number a fixed tool or the compiler returns over a window, add a value case to `evals/make_value_goldens.py`, a function computed in plain Python over the generator's records whose case is added to the list the script builds (the semantic cases are listed in `semantic_cases`), and run the script: it rewrites `evals/golden_values.json`, and the diff should add your case and change nothing else.
 1. **The run.** `python -m pytest -q tests/test_examples.py` compares the oracle with the compiler, and `python3 evals/run.py` runs every golden case. A difference is either a bug in the compiler or the tool, or a definition the oracle reads otherwise: settle which before changing either.
-1. **The owner's check.** A new case is `reviewed_by: owner-pending` until the owner has read its number on the pull request's preview; then it is `owner`.
-1. **The golden case.** `/add-golden-case <what>` adds the question to `evals/golden.json` with the address it must resolve to and the tools it must run, and makes it pass. A bug becomes a golden case before it is fixed.
+1. **The owner's check.** A new case or example carries `reviewed_by: owner-pending` in its entry (in `evals/golden.json` or `examples.json`) until the owner has read its number on the pull request's preview; then it is `owner`.
+1. **The golden case.** Add the question to `evals/golden.json` with the address it must resolve to and the tools it must run, and make it pass. In a Claude Code session on this repository, the skill `/add-golden-case <what>` does it; by hand, copy a case of the same type ([the golden set](../evals/README.md) describes each). A bug becomes a golden case before it is fixed.
