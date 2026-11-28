@@ -28873,6 +28873,146 @@
     ]
    },
    "note": "Issue #185, the coordinator's review of PR #186 at 9d12f76 (round 3), the reviewer subagent's re-check of the fix: the waste breakdown of P2 with P1 beside, as main and 9d12f76 answered; a draft of this round refused it."
+  },
+  {
+   "id": "top-n-date-trim-for-sept-the-10th-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim for Sept the 10th",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Refused, as on main; 161eabb answered the whole month's side trim."
+  },
+  {
+   "id": "top-n-date-trim-in-sep-10th-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim in Sep, 10th",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Refused, as on main; 161eabb answered the whole month's side trim."
+  },
+  {
+   "id": "top-n-date-trim-on-the-3rd-in-aug-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim on the 3rd in Aug",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Refused, as on main; 161eabb answered the whole month's side trim."
+  },
+  {
+   "id": "top-n-date-trim-the-10th-in-sep-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "trim the 10th in Sep",
+   "expect": {
+    "raises": "^Offline mode supports shift performance"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Refused, as on main; 161eabb answered the whole month's side trim."
+  },
+  {
+   "id": "top-n-date-downtime-on-the-10th-in-sep-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime on the 10th in Sep",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-msf-for-sept-the-10th-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf for Sept the 10th",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=grade",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-speed-for-sept-the-10th-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed for Sept the 10th",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-downtime-in-sep-week-of-the-7th-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Sep, week of the 7th",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-msf-in-sep-10th-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf in Sep (10th)",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=grade",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-downtime-in-sep-10-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "downtime in Sep/10",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-speed-in-sep-around-the-10th-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "speed in Sep around the 10th",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
+  },
+  {
+   "id": "top-n-date-msf-the-7th-through-the-11th-in-sep-keeps-mains-answer",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "msf the 7th through the 11th in Sep",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=grade",
+    "status": "complete"
+   },
+   "note": "Issue #185, the coordinator's catch-up comment on PR #186 at 161eabb, part 2 (review comment 6970031227): a short month with 'the', 'on the' or punctuation between it and a day's number, or a day's number before the lead word, is never the whole month. Main's answer, the page's window; 161eabb answered the whole month."
   }
  ]
 }

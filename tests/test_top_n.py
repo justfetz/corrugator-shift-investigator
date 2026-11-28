@@ -746,6 +746,55 @@ def test_two_months_said_short_read_as_the_pair_said_in_full(said, read):
     assert agent.read_shorthand(said) == read
 
 
+# ---- The coordinator's catch-up comment at 161eabb, part 2 (review 6970031227): punctuation or "the" between a short month and its
+# day's number, or a day's number before the word that leads the month, each answered the whole month where main refused or answered
+# the page's window
+
+DATE_FAMILY = ['for sept the 10th', 'in sep, 10th', 'on the 3rd in aug', 'the 10th in sep', 'on the 10th in sep', 'in sep, week of the 7th',
+               'in sep the 10th', 'in sep (10th)', 'in sep: 10', 'in sep - 10', 'in sep-10', 'in sep/10', 'for sept., 10', 'in sep on 10',
+               'in sep around the 10th', 'in sep around 10', 'the 7th through the 11th in sep', 'from the 7th to the 11th in sep',
+               'in sep, the 10th', 'for aug, the 3rd', 'in aug on the 3rd', '3rd in aug', 'in sep.10', 'in sept on the 10th']
+
+
+@pytest.mark.parametrize('said', DATE_FAMILY)
+def test_a_short_month_with_punctuation_or_the_before_its_day_is_never_read_as_the_month(said):
+    from investigator import agent
+    assert agent.read_shorthand('trim ' + said) == 'trim ' + said
+
+
+@pytest.mark.parametrize('said', [re.sub(r'\baug\b', 'august', re.sub(r'\bsept?\b', 'september', s)) for s in DATE_FAMILY])
+def test_a_month_with_punctuation_or_the_before_its_day_is_a_named_date(said):
+    """The waste route's own check (named_date): "waste breakdown on the 3rd in August" is no breakdown of August."""
+    from investigator import agent
+    assert agent.named_date('waste breakdown ' + said), said
+
+
+@pytest.mark.parametrize('said, read', [('in sept', 'in september'), ('last mo', 'last month'), ('sep 2026', 'september 2026'),
+                                        ('shift 2 in sept', 'shift 2 in september'), ('in sept on the 2nd shift', 'in september on the 2nd shift'),
+                                        ('top 3 in aug', 'top 3 in august'), ('on shift 2 for aug', 'on shift 2 for august')])
+def test_a_shift_or_a_ranking_number_beside_a_short_month_is_no_day(said, read):
+    """... while a shift's number, or one after a word of NOT_A_DAY, is never a day's: the month is read as at 161eabb."""
+    from investigator import agent
+    assert agent.read_shorthand(said) == read
+    assert not agent.named_date(read)
+
+
+@pytest.mark.parametrize('question', ['trim for Sept the 10th', 'trim on the 3rd in Aug', 'downtime on the 10th in Sep', 'msf for Sept the 10th',
+                                      'speed for Sept the 10th', 'downtime in Sep, week of the 7th', 'waste breakdown on the 3rd in August',
+                                      'waste breakdown for September the 10th'])
+def test_the_date_family_never_reads_the_whole_month(store, question):
+    """Refused, or the page's own window as main read it (the waste breakdown's month holding the selected day, anchored on it), never
+    the month the question names, anchored on its first day (161eabb's reading)."""
+    named = '2026-08-01' if re.search(r'\baug', question, re.I) else '2026-09-01'
+    for scope in ('shift', 'day'):
+        try:
+            request, _ = route(question, Context(DAY, 2, scope=scope, period='day'), store.production_days, store)
+        except ValueError:
+            continue   # refused, as main refused the short months
+        windows = [s['arguments'].get('window') or {} for s in request.get('plan') or []]   # no plan: the day's own tools, as on main
+        assert not any(w.get('period') == 'month' and w.get('anchor') == named for w in windows), (question, scope, windows)
+
+
 def test_a_shift_or_a_ranking_number_before_a_month_is_no_named_date():
     """The reviewer's check of round 3: "waste breakdown shift 2 August" is August's, as at 9d12f76."""
     from investigator import agent
