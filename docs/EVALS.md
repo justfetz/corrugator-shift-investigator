@@ -4,7 +4,7 @@ The rule is short: numbers come from tool results, never from prose. This page s
 
 ## Where a number comes from
 
-1. **A tool computes it.** Every figure is a column of a row a fixed, parameterized DuckDB query returned over the selected scope. Percentages are ratios of sums over the window, never averages of per-shift percentages, and a tool says which direction is better for each measure.
+1. **A tool computes it.** Every figure is a column of a row a fixed, parameterized DuckDB query returned over the selected scope. The query is a fixed tool's, written by hand, or the semantic model's compiler's, written from the model file; [how a question becomes SQL](SQL.md) follows one of each, with its statements, bound values and rows. Percentages are ratios of sums over the window, never averages of per-shift percentages, and a tool says which direction is better for each measure.
 2. **Application code places it.** The offline answer's headline and findings are built by `shapes.py` from those rows; each bold figure carries the reference `(query N · row M)` of the row it came from, and the charts are drawn from the same rows.
 3. **A model, if asked, only points at it.** The analyst writes placeholders, and the server fills each from the cited row ([the analyst](ANALYST.md)).
 
@@ -12,7 +12,7 @@ A narrative that states a number no tool returned is a bug, and every bug become
 
 ## The golden set
 
-Two files hold the cases. `evals/golden.json` is questions with written expectations: which tools must run with which arguments, which charts, what the answer must and must not say, which address the question resolves to, how fast it must be. `evals/golden_values.json` is generated, never typed: `evals/make_value_goldens.py` computes every expected number a second way, with plain Python sums over the record families and its own calendar arithmetic, and stamps the file with the dataset's content hash so a changed generator fails every value case until the goldens are deliberately regenerated.
+Two files hold the cases. `evals/golden.json` is questions with written expectations: which tools must run with which arguments, which charts, what the answer must and must not say, which address the question resolves to, how fast it must be. `evals/golden_values.json` is generated, never typed: `evals/make_value_goldens.py` computes every expected number a second way, with plain Python sums over the record families and its own calendar arithmetic, and stamps the file with the dataset's content hash so a changed generator fails every value case until the goldens are deliberately regenerated. [How the SQL is tested](SQL.md#how-the-sql-is-tested) shows a real case of each layer beside the SQL it checks, and how to add one.
 
 | Type | What it proves |
 | --- | --- |

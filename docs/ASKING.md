@@ -99,7 +99,7 @@ A refusal says what to ask instead; it never guesses.
 
 Read an answer as **recorded finding → question to investigate → something a person verifies**. A large knife-jam total says where to look with the crew; it does not prove a worn part or justify changing machine settings. Notes describe reported observations. A target gap is not guaranteed recoverable output, and this dataset cannot establish savings, profitability or the best plant-wide improvement.
 
-Every figure names the query and row it came from: the `(query N · row M)` link beside a finding opens the query box at that step, with its SQL and bound values, and "What came back, per query" at the foot of the card holds each step's full result. "Complete" means the investigation finished, not that it proved a cause. If an answer misses your intent, narrow the question and read the queries it ran.
+Every figure names the query and row it came from: the `(query N · row M)` link beside a finding opens the query box at that step, with its SQL and bound values, and "What came back, per query" at the foot of the card holds each step's full result. "Complete" means the investigation finished, not that it proved a cause. If an answer misses your intent, narrow the question and read the queries it ran. [How a question becomes SQL](SQL.md) follows one question from its words to that SQL and its rows, and shows how the SQL is tested.
 
 ## The money on every card
 

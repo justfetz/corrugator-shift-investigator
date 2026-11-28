@@ -305,7 +305,7 @@ CASE_STUDY = ROOT / 'docs' / 'CASE_STUDY.md'
 
 def figure_root(tmp_path):
     """A copy of what the docs build reads (the recordings too), to break one file at a time."""
-    for source in [p['source'] for p in docsite.pages()] + list(docsite.FIGURE_SOURCES):
+    for source in [p['source'] for p in docsite.pages()] + list(docsite.FIGURE_SOURCES) + list(docsite.RENDERED_SOURCES):
         (tmp_path / source).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / source, tmp_path / source)
     shutil.copytree(ROOT / 'evals' / 'fixtures', tmp_path / 'evals' / 'fixtures')

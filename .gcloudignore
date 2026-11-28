@@ -1,7 +1,9 @@
 .venv
 .git
 artifacts
-tests
+# tests/ stays out but for the oracles /docs/sql renders (issue #190)
+tests/*
+!tests/test_examples.py
 # docs/*.md is uploaded: the image renders it into /docs (issue #93)
 docs/archive
 docs/design

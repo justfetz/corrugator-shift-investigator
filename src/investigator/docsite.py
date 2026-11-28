@@ -17,6 +17,11 @@ A page in `FIGURE_PAGES` (the case study, issue #116) types no number: each `{{n
 at build from the eval runner's files, the changelog and the cost model (`figures`), and the build
 refuses the page when a digit or a number word is typed into its text (`typed_numbers`). The image build
 is strict; the workbench renders such a page as a short notice instead of failing to start.
+
+A page in `RENDERED_PAGES` (`/docs/sql`, issue #190) is rendered by the code it describes: each `{{name}}` in it is a block
+(SQL, a plan, bound values, result rows, a test's own source) that `sqlpage` produces at build from the router, the
+compiler, the record store and the test files, under the same strict and lenient builds. It reads the record store, so it
+imports DuckDB; the changelog path never reaches it.
 """
 import html
 import json
@@ -51,6 +56,7 @@ SECTIONS = (
                            ('golden-set', 'evals/README.md', 'The golden set in full'),
                            ('metrics', 'docs/METRICS.md', 'Metrics and formulas'),
                            ('semantic-model', 'src/investigator/semantic_model.json', 'The semantic model'),
+                           ('sql', 'docs/SQL.md', 'How a question becomes SQL'),
                            ('testing', 'docs/TESTING.md', 'Testing'))),
     ('Cost model', (('cost-model', 'docs/COST_MODEL.md', 'Cost model'),)),
     ('Data', (('data', 'docs/DATA.md', 'Data'),
@@ -73,6 +79,18 @@ def _semantic_page(text):
 
 
 GENERATED_PAGES = {'src/investigator/semantic_model.json': _semantic_page}
+
+
+# Pages rendered by the code they describe (issue #190): source -> (text, root, store) -> the filled Markdown. The store is
+# a hint (the workbench's own); the hook reads the golden window's records when it does not hold the days the page reads.
+def _sql_page(text, root, store=None):
+    from .sqlpage import render
+    return render(text, root, store)
+
+
+RENDERED_PAGES = {'docs/SQL.md': _sql_page}
+# The repository files a rendered page reads besides its own source; the image ships them (Dockerfile, .dockerignore).
+RENDERED_SOURCES = ('tests/test_examples.py', 'evals/golden.json', 'evals/golden_values.json', 'evals/make_value_goldens.py')
 
 # ---- Figures (issue #116): pages whose every number is read at build, never typed.
 FIGURE_PAGES = ('docs/CASE_STUDY.md',)
@@ -673,11 +691,12 @@ def _figures_page(page, text, root, values):
     return expand_figures(text, values, page['source']), values
 
 
-def build_site(root=ROOT, strict=True):
+def build_site(root=ROOT, strict=True, store=None):
     """{url path: html bytes} for every page; raises when a listed source is missing.
 
-    A figures page that cannot be built raises too, unless `strict` is False (the workbench, `load_site`): then
-    the page says why in one line and the rest of the site, and the server, carry on."""
+    A figures page or a rendered page that cannot be built raises too, unless `strict` is False (the workbench,
+    `load_site`): then the page says why in one line and the rest of the site, and the server, carry on. `store` is the
+    workbench's record store, which a rendered page reads when it holds the page's days."""
     root = Path(root)
     all_pages = pages()
     by_source = {p['source']: p['url'] for p in all_pages}
@@ -698,6 +717,15 @@ def build_site(root=ROOT, strict=True):
                 print(f'docs site: {page["source"]} not built: {exc}', file=sys.stderr)
                 text = (f'# {page["label"]}\n\nThis page reads every figure from the eval history, the changelog and the '
                         f'cost model when the docs are built, and could not be built here: {exc}\n')
+        if page['source'] in RENDERED_PAGES:
+            try:
+                text = RENDERED_PAGES[page['source']](text, root, store)
+            except Exception as exc:   # whatever the code it runs raises: the image build fails, the workbench carries on
+                if strict:
+                    raise
+                print(f'docs site: {page["source"]} not built: {exc}', file=sys.stderr)
+                text = (f'# {page["label"]}\n\nThis page is rendered by the router, the compiler and the record store when the '
+                        f'docs are built, and could not be built here: {exc}\n')
         title, body, headings = render_page(page, text, by_source)
         if page['slug'] == '':
             body += '\n' + _contents(all_pages)
@@ -725,9 +753,10 @@ def write_site(out, root=ROOT):
     return site
 
 
-def load_site():
+def load_site(store=None):
     """The pages the server serves: the prebuilt folder INVESTIGATOR_DOCS names (the image), else the
-    checkout's docs rendered now (the workbench), else None (a wheel installed without the repository)."""
+    checkout's docs rendered now (the workbench, `store` its record store), else None (a wheel installed without the
+    repository)."""
     named = os.environ.get('INVESTIGATOR_DOCS')
     if named:
         folder = Path(named)
@@ -737,10 +766,10 @@ def load_site():
     if not all(path.is_file() for path in sources):
         return None
     # A missing figure source is the lenient build's to report on its page; it does not take the site down.
-    inputs = sources + [ROOT / s for s in FIGURE_SOURCES]
+    inputs = sources + [ROOT / s for s in FIGURE_SOURCES + RENDERED_SOURCES]
     stamp = tuple(path.stat().st_mtime_ns if path.is_file() else None for path in inputs)   # one render until one changes
     if _RENDERED.get('stamp') != stamp:
-        _RENDERED.update(stamp=stamp, site=build_site(ROOT, strict=False))
+        _RENDERED.update(stamp=stamp, site=build_site(ROOT, strict=False, store=store))
     return _RENDERED['site']
 
 
